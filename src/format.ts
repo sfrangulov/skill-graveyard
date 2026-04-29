@@ -193,22 +193,23 @@ function formatHeadline(report: AuditReport, c: typeof C): string[] {
 }
 
 function formatActiveSection(rows: AuditRow[], c: typeof C): string[] {
+  const cols = process.stdout.columns ?? 100;
   const max = Math.max(...rows.map((r) => r.usage?.totalCalls ?? 0));
-  const skillW = Math.max(
-    "skill".length,
-    ...rows.map((r) => r.invokeName.length),
-  );
   const lastW = Math.max(
-    "last".length,
     ...rows.map((r) => relativeTime(r.usage?.lastCallAt ?? null).length),
   );
+  const sourceW = Math.max(
+    ...rows.map((r) => sourceLabel(r).length),
+  );
+  const longestName = Math.max(...rows.map((r) => r.invokeName.length));
+
+  // row layout: "  " + name + "  " + bar(16) + " " + calls(3) + "  " + last + "  " + source
+  const fixedW = 2 + 2 + BAR_WIDTH + 1 + 3 + 2 + lastW + 2 + sourceW;
+  const nameW = Math.max(18, Math.min(longestName, cols - fixedW));
 
   const lines: string[] = [];
   lines.push(
     `${c.green}${c.bold}ACTIVE (${rows.length})${c.reset}  ${c.dim}installed and invoked — keep${c.reset}`,
-  );
-  lines.push(
-    `${c.dim}${"skill".padEnd(skillW)}  ${"usage".padEnd(BAR_WIDTH + 4)}  ${"last".padEnd(lastW)}  source${c.reset}`,
   );
 
   for (const r of rows) {
@@ -217,11 +218,18 @@ function formatActiveSection(rows: AuditRow[], c: typeof C): string[] {
     const callsStr = String(calls).padStart(3);
     const last = relativeTime(r.usage?.lastCallAt ?? null).padEnd(lastW);
     const src = sourceLabel(r);
+    const name = truncate(r.invokeName, nameW).padEnd(nameW);
     lines.push(
-      `${r.invokeName.padEnd(skillW)}  ${c.green}${b}${c.reset} ${callsStr}  ${c.dim}${last}${c.reset}  ${c.dim}${src}${c.reset}`,
+      `  ${name}  ${c.green}${b}${c.reset} ${callsStr}  ${c.dim}${last}${c.reset}  ${c.dim}${src}${c.reset}`,
     );
   }
   return lines;
+}
+
+function truncate(s: string, w: number): string {
+  if (s.length <= w) return s;
+  if (w <= 1) return "…";
+  return s.slice(0, w - 1) + "…";
 }
 
 function formatMissingSection(rows: AuditRow[], c: typeof C): string[] {
