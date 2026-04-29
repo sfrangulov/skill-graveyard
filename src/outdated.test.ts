@@ -9,9 +9,11 @@ import {
   enumerateGitSources,
   buildReport,
   compareSemver,
+  runOutdated,
   type GitSource,
   type PluginSource,
 } from "./outdated.js";
+import type { Fetcher } from "./fetcher.js";
 
 async function withClaudeDir<T>(
   fn: (claudeDir: string) => Promise<T>,
@@ -313,4 +315,130 @@ test("buildReport classifies git source unknown when no branch (detached HEAD)",
   });
   assert.equal(r.counters.unknown, 1);
   assert.equal(r.rows[0]!.reason, "detached HEAD");
+});
+
+// ----- runOutdated orchestration tests -----
+
+function makeMockFetcher(opts: {
+  marketplaceData?: unknown;
+  marketplaceError?: string;
+  lsRemoteSha?: string | null;
+  lsRemoteError?: string;
+}) {
+  let mpCalls = 0;
+  let lsCalls = 0;
+  const fetcher: Fetcher = {
+    async fetchMarketplace() {
+      mpCalls++;
+      if (opts.marketplaceError) throw new Error(opts.marketplaceError);
+      return opts.marketplaceData ?? { plugins: [] };
+    },
+    async gitLsRemote() {
+      lsCalls++;
+      if (opts.lsRemoteError) throw new Error(opts.lsRemoteError);
+      return opts.lsRemoteSha === undefined ? null : opts.lsRemoteSha;
+    },
+  };
+  return { fetcher, calls: () => ({ mp: mpCalls, ls: lsCalls }) };
+}
+
+test("runOutdated uses cache on second invocation; no extra fetches", async () => {
+  await withClaudeDir(
+    async (dir) => {
+      const cacheDir = join(dir, "cache");
+      const { fetcher, calls } = makeMockFetcher({
+        marketplaceData: { plugins: [{ name: "foo", version: "1.0.0" }] },
+        lsRemoteSha: "deadbeef",
+      });
+
+      const r1 = await runOutdated({ claudeDir: dir, cacheDir, ttlMinutes: 60, fetcher });
+      const after1 = calls();
+      assert.equal(r1.cacheHits, 0);
+      assert.ok(after1.mp >= 1);
+
+      const r2 = await runOutdated({ claudeDir: dir, cacheDir, ttlMinutes: 60, fetcher });
+      const after2 = calls();
+      // second run hits cache for everything fetched the first time
+      assert.equal(after2.mp, after1.mp);
+      assert.equal(after2.ls, after1.ls);
+      assert.ok(r2.cacheHits > 0);
+    },
+    async (dir) => {
+      await writeFile(
+        join(dir, "plugins/installed_plugins.json"),
+        JSON.stringify({
+          version: 2,
+          plugins: {
+            "foo@m": [{ scope: "user", installPath: "/x", version: "1.0.0", gitCommitSha: "abc" }],
+          },
+        }),
+      );
+      await writeFile(
+        join(dir, "plugins/known_marketplaces.json"),
+        JSON.stringify({ m: { source: { source: "github", repo: "owner/m" } } }),
+      );
+    },
+  );
+});
+
+test("runOutdated with noCache=true refetches", async () => {
+  await withClaudeDir(
+    async (dir) => {
+      const cacheDir = join(dir, "cache");
+      const { fetcher, calls } = makeMockFetcher({
+        marketplaceData: { plugins: [{ name: "foo", version: "1.0.0" }] },
+        lsRemoteSha: "deadbeef",
+      });
+      await runOutdated({ claudeDir: dir, cacheDir, ttlMinutes: 60, fetcher });
+      const after1 = calls();
+
+      await runOutdated({ claudeDir: dir, cacheDir, ttlMinutes: 60, noCache: true, fetcher });
+      const after2 = calls();
+
+      // noCache invalidates first → fetcher called again
+      assert.ok(after2.mp > after1.mp);
+    },
+    async (dir) => {
+      await writeFile(
+        join(dir, "plugins/installed_plugins.json"),
+        JSON.stringify({
+          version: 2,
+          plugins: { "foo@m": [{ scope: "user", installPath: "/x", version: "1.0.0" }] },
+        }),
+      );
+      await writeFile(
+        join(dir, "plugins/known_marketplaces.json"),
+        JSON.stringify({ m: { source: { source: "github", repo: "owner/m" } } }),
+      );
+    },
+  );
+});
+
+test("runOutdated counters consistent with returned rows", async () => {
+  await withClaudeDir(
+    async (dir) => {
+      const cacheDir = join(dir, "cache");
+      const { fetcher } = makeMockFetcher({
+        marketplaceData: { plugins: [{ name: "foo", version: "2.0.0" }] },
+        lsRemoteSha: "deadbeef",
+      });
+      const r = await runOutdated({ claudeDir: dir, cacheDir, ttlMinutes: 60, fetcher });
+      const sum = r.counters.outdated + r.counters.upToDate + r.counters.unknown + r.counters.errored;
+      assert.equal(sum, r.rows.length);
+      assert.ok(r.rows.length >= 1);
+    },
+    async (dir) => {
+      await writeFile(
+        join(dir, "plugins/installed_plugins.json"),
+        JSON.stringify({
+          version: 2,
+          plugins: { "foo@m": [{ scope: "user", installPath: "/x", version: "1.0.0" }] },
+        }),
+      );
+      await writeFile(
+        join(dir, "plugins/known_marketplaces.json"),
+        JSON.stringify({ m: { source: { source: "github", repo: "owner/m" } } }),
+      );
+    },
+  );
 });

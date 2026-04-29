@@ -1,7 +1,10 @@
 import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { Cache } from "./cache.js";
 import { discoverInstalledSkills, findGitRoot } from "./discovery.js";
+import { type Fetcher, realFetcher } from "./fetcher.js";
 import { resolveClaudePaths } from "./paths.js";
 import { classifyMarketplaceEntry, type MarketplaceEntry } from "./source_resolver.js";
 
@@ -374,6 +377,157 @@ function classifyByLsRemote(
     latestVersion: short(got),
     upgradeHint: UPDATE_HINT(p.pluginId),
   };
+}
+
+export interface RunOutdatedOpts {
+  claudeDir: string;
+  cacheDir?: string;
+  ttlMinutes?: number;
+  noCache?: boolean;
+  fetcher?: Fetcher;
+}
+
+function hashKey(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
+}
+
+export async function runOutdated(opts: RunOutdatedOpts): Promise<OutdatedReport> {
+  const fetcher = opts.fetcher ?? realFetcher;
+  const ttl = opts.ttlMinutes ?? 60;
+  const cache = new Cache(
+    opts.cacheDir ?? join(homedir(), ".cache", "skill-graveyard", "outdated"),
+  );
+
+  const plugins = await enumeratePluginSources(opts.claudeDir);
+  const gits = await enumerateGitSources(opts.claudeDir);
+
+  // populate affectedSkills using existing discovery
+  const paths = resolveClaudePaths(opts.claudeDir);
+  const allSkills = await discoverInstalledSkills(paths);
+  for (const p of plugins) {
+    const skillsRoot = join(p.installPath, "skills");
+    p.affectedSkills = allSkills
+      .filter((s) => s.source.kind === "plugin" && s.source.dir === skillsRoot)
+      .map((s) => s.bareName)
+      .sort();
+  }
+
+  let cacheHits = 0;
+  const bumpHits = () => {
+    cacheHits++;
+  };
+
+  // Phase 1: marketplaces (JSON + HEAD SHA), parallel across unique repos
+  const marketplaces = new Map<string, MarketplaceFetchResult>();
+  const repos = [
+    ...new Set(plugins.map((p) => p.marketplaceRepo).filter((x): x is string => !!x)),
+  ];
+  await Promise.all(
+    repos.map(async (repo) => {
+      const result: MarketplaceFetchResult = {};
+
+      // (a) marketplace JSON
+      const jsonKey = `marketplace-${repo}`;
+      if (opts.noCache) await cache.invalidate(jsonKey);
+      const cachedJson = await cache.get<{ plugins: MarketplaceEntry[] }>(jsonKey, ttl);
+      if (cachedJson) {
+        result.data = cachedJson;
+        bumpHits();
+      } else {
+        try {
+          const data = await fetcher.fetchMarketplace(repo);
+          if (
+            data &&
+            typeof data === "object" &&
+            Array.isArray((data as { plugins?: unknown }).plugins)
+          ) {
+            const narrowed = data as { plugins: MarketplaceEntry[] };
+            await cache.set(jsonKey, narrowed);
+            result.data = narrowed;
+          } else {
+            result.error = "marketplace JSON missing plugins array";
+          }
+        } catch (e) {
+          result.error = e instanceof Error ? e.message : String(e);
+        }
+      }
+
+      // (b) marketplace HEAD SHA — try main, fall back to master
+      const headKey = `marketplaceHead-${repo}`;
+      if (opts.noCache) await cache.invalidate(headKey);
+      const cachedHead = await cache.get<{ sha: string }>(headKey, ttl);
+      if (cachedHead) {
+        result.marketplaceHeadSha = cachedHead.sha;
+        bumpHits();
+      } else {
+        const url = `https://github.com/${repo}.git`;
+        for (const branch of ["main", "master"]) {
+          try {
+            const sha = await fetcher.gitLsRemote(url, branch);
+            if (sha) {
+              await cache.set(headKey, { sha, branch, fetchedAt: Date.now() });
+              result.marketplaceHeadSha = sha;
+              break;
+            }
+          } catch {
+            // try next; if both fail, leave marketplaceHeadSha undefined
+          }
+        }
+      }
+
+      marketplaces.set(repo, result);
+    }),
+  );
+
+  // Phase 2: collect unique (url, branch) pairs and fetch in parallel
+  const remotesNeeded = new Map<string, { url: string; branch: string }>();
+  for (const p of plugins) {
+    if (!p.marketplaceRepo) continue;
+    const market = marketplaces.get(p.marketplaceRepo);
+    if (!market?.data) continue;
+    const entry = market.data.plugins.find((x) => x.name === p.pluginName);
+    if (!entry) continue;
+    const strat = classifyMarketplaceEntry(entry);
+    if (strat.kind === "ls-remote-upstream" || strat.kind === "sha-pinned-or-ref") {
+      remotesNeeded.set(`${strat.url}@${strat.branch}`, {
+        url: strat.url,
+        branch: strat.branch,
+      });
+    }
+  }
+  for (const g of gits) {
+    if (!g.remoteUrl || !g.branch) continue;
+    remotesNeeded.set(`${g.remoteUrl}@${g.branch}`, { url: g.remoteUrl, branch: g.branch });
+  }
+
+  const gitRemoteShas = new Map<string, string | { error: string }>();
+  await Promise.all(
+    [...remotesNeeded.entries()].map(async ([key, { url, branch }]) => {
+      const cacheKey = `gitremote-${hashKey(key)}`;
+      if (opts.noCache) await cache.invalidate(cacheKey);
+      const cached = await cache.get<{ sha: string }>(cacheKey, ttl);
+      if (cached) {
+        gitRemoteShas.set(key, cached.sha);
+        bumpHits();
+        return;
+      }
+      try {
+        const sha = await fetcher.gitLsRemote(url, branch);
+        if (sha === null) {
+          gitRemoteShas.set(key, { error: `branch ${branch} not on remote` });
+        } else {
+          await cache.set(cacheKey, { sha, branch, fetchedAt: Date.now() });
+          gitRemoteShas.set(key, sha);
+        }
+      } catch (e) {
+        gitRemoteShas.set(key, { error: e instanceof Error ? e.message : String(e) });
+      }
+    }),
+  );
+
+  return buildReport({ plugins, gits, marketplaces, gitRemoteShas, cacheHits });
 }
 
 function classifyGit(g: GitSource, shas: Map<string, string | { error: string }>): OutdatedRow {
