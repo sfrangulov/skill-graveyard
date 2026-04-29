@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>skill-graveyard — audit Claude Code skills you actually use</title>
+<meta name="description" content="A CLI that audits which Claude Code skills are alive, dead, missing, or hallucinated — surfacing both removal candidates and install candidates from your local session logs." />
+<meta name="theme-color" content="#0a0c0e" />
+<meta property="og:title" content="skill-graveyard" />
+<meta property="og:description" content="Audit which Claude Code skills you actually use." />
+<meta property="og:type" content="website" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;0,800;1,400&display=swap" rel="stylesheet" />
+
+<style>
+:root{
+  --bg:#0a0c0e;
+  --bg-2:#101317;
+  --surface:#14171b;
+  --line:#23262c;
+  --text:#e8e3d8;
+  --text-soft:#b6b1a6;
+  --muted:#6c7480;
+  --accent:#ff9a3c;
+  --accent-soft:#ff9a3c33;
+  --green:#9bc28c;
+  --red:#c97064;
+  --cyan:#7eb6c5;
+  --yellow:#d8c060;
+  --col:88ch;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:15px;
+  line-height:1.6;
+  font-feature-settings:"liga" 0, "calt" 0;
+  text-rendering:optimizeLegibility;
+  min-height:100vh;
+  position:relative;
+  overflow-x:hidden;
+}
+
+/* Phosphor afterglow + faint scanline atmosphere. Subtle on purpose. */
+body::before{
+  content:"";
+  position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse at 50% -10%, #1d1812 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 110%, #0e1418 0%, transparent 50%);
+  pointer-events:none;
+  z-index:0;
+}
+body::after{
+  content:"";
+  position:fixed;inset:0;
+  background:repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    rgba(255,255,255,0.012) 2px,
+    rgba(255,255,255,0.012) 3px
+  );
+  pointer-events:none;
+  z-index:1;
+  mix-blend-mode:overlay;
+}
+
+.wrap{
+  position:relative;
+  z-index:2;
+  max-width:var(--col);
+  margin:0 auto;
+  padding:3rem 1.5rem 6rem;
+}
+@media(min-width:760px){
+  .wrap{padding:5rem 2.5rem 8rem}
+  body{font-size:15.5px}
+}
+
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft);transition:border-color .15s}
+a:hover{border-bottom-color:var(--accent)}
+
+::selection{background:var(--accent);color:#0a0c0e}
+
+/* ── Header ─────────────────────────────────────── */
+
+.topline{
+  display:flex;justify-content:space-between;gap:1rem;
+  font-size:.78rem;color:var(--muted);
+  border-bottom:1px solid var(--line);
+  padding-bottom:.6rem;margin-bottom:3rem;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.topline span{white-space:nowrap}
+.topline .right{display:flex;gap:1.25rem;flex-wrap:wrap}
+.topline .right a{color:var(--muted);border-bottom-color:transparent}
+.topline .right a:hover{color:var(--text);border-bottom-color:var(--text)}
+
+/* ── Hero ───────────────────────────────────────── */
+
+.hero h1{
+  font-weight:800;
+  font-size:clamp(2.6rem, 9vw, 5.2rem);
+  letter-spacing:-.04em;
+  line-height:.96;
+  margin:0 0 .6rem;
+  color:var(--text);
+}
+.hero h1 .dash{color:var(--accent)}
+.hero h1 .cursor{
+  display:inline-block;width:.55ch;height:1em;
+  background:var(--accent);
+  margin-left:.06em;
+  vertical-align:-.08em;
+  animation:blink 1.05s steps(2,jump-none) infinite;
+}
+@keyframes blink{50%{opacity:0}}
+.hero .tag{
+  font-size:1.05rem;
+  color:var(--text-soft);
+  margin:0 0 2.5rem;
+  max-width:62ch;
+}
+.hero .tag em{color:var(--accent);font-style:normal}
+
+.cmdblock{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:2px;
+  padding:1rem 1.2rem;
+  font-size:.92rem;
+  position:relative;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:.85rem;
+}
+.cmdblock .prompt{color:var(--accent);user-select:none;line-height:1}
+.cmdblock .cmd{color:var(--text);min-width:0;overflow-x:auto;white-space:nowrap;line-height:1.2}
+.cmdblock button{
+  font:inherit;font-size:.72rem;
+  background:transparent;color:var(--muted);
+  border:1px solid var(--line);
+  border-radius:2px;
+  padding:.25rem .55rem;
+  cursor:pointer;
+  letter-spacing:.06em;text-transform:uppercase;
+  transition:color .15s,border-color .15s,background .15s;
+}
+.cmdblock button:hover{color:var(--accent);border-color:var(--accent)}
+.cmdblock button.copied{color:var(--green);border-color:var(--green)}
+
+.hero .cmdblock{margin-bottom:1rem}
+.hero .meta{
+  display:flex;flex-wrap:wrap;gap:1.2rem;
+  color:var(--muted);
+  font-size:.78rem;letter-spacing:.04em;
+  margin-top:1.4rem;
+  text-transform:uppercase;
+}
+.hero .meta b{color:var(--text-soft);font-weight:500}
+
+/* ── Section structure ─────────────────────────── */
+
+section{margin:6rem 0 0}
+section.tight{margin:4rem 0 0}
+
+.section-head{
+  display:flex;align-items:baseline;gap:1ch;
+  color:var(--muted);
+  font-size:.8rem;letter-spacing:.18em;
+  text-transform:uppercase;
+  margin:0 0 .3rem;
+}
+.section-head::before{content:"§";color:var(--accent);font-weight:600;letter-spacing:0;font-size:1rem}
+.section-head .num{color:var(--text-soft)}
+
+h2{
+  font-size:clamp(1.6rem, 4vw, 2.2rem);
+  font-weight:700;
+  letter-spacing:-.025em;
+  margin:0 0 .6rem;
+  line-height:1.15;
+  color:var(--text);
+  max-width:32ch;
+}
+.lede{
+  font-size:1rem;
+  color:var(--muted);
+  max-width:64ch;
+  margin:0 0 1.6rem;
+  line-height:1.55;
+}
+.lede code{color:var(--text-soft)}
+
+h3{
+  font-size:1rem;font-weight:500;
+  letter-spacing:.02em;
+  margin:0 0 .35rem;
+  color:var(--accent);
+}
+
+p{margin:0 0 1rem;color:var(--text-soft);max-width:72ch}
+p strong{color:var(--text);font-weight:600}
+
+/* ── Buckets ───────────────────────────────────── */
+
+.buckets{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:1px;
+  background:var(--line);
+  border:1px solid var(--line);
+  border-radius:2px;
+  margin-top:2rem;
+}
+@media(min-width:680px){
+  .buckets{grid-template-columns:1fr 1fr}
+}
+.bucket{
+  background:var(--bg-2);
+  padding:1.6rem 1.4rem;
+  display:flex;flex-direction:column;gap:.5rem;
+}
+.bucket .label{
+  display:flex;align-items:center;gap:.7rem;
+  font-size:.78rem;letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.bucket .marker{font-size:1.05rem;line-height:1}
+.bucket h4{
+  font-size:1.5rem;font-weight:700;margin:.1rem 0 .2rem;
+  letter-spacing:-.02em;
+}
+.bucket p{font-size:.92rem;margin:0;color:var(--text-soft)}
+.bucket.active .marker,.bucket.active h4{color:var(--green)}
+.bucket.dead .marker,.bucket.dead h4{color:var(--red)}
+.bucket.missing .marker,.bucket.missing h4{color:var(--cyan)}
+.bucket.hallucinated .marker,.bucket.hallucinated h4{color:var(--yellow)}
+
+/* ── Terminal output blocks ────────────────────── */
+
+.terminal{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:2px;
+  margin:1.2rem 0;
+  overflow:hidden;
+  position:relative;
+}
+.terminal .bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.55rem .9rem;
+  background:#0e1115;
+  border-bottom:1px solid var(--line);
+  font-size:.72rem;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.terminal .bar .dots{display:flex;gap:.4rem}
+.terminal .bar .dots span{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--line);
+}
+.terminal .bar .dots span:nth-child(1){background:#3a2a26}
+.terminal .bar .dots span:nth-child(2){background:#332a1a}
+.terminal .bar .dots span:nth-child(3){background:#1f2a22}
+.terminal pre{
+  margin:0;
+  padding:1.2rem 1.3rem 1.4rem;
+  font-size:.82rem;
+  line-height:1.55;
+  overflow-x:auto;
+  color:var(--text-soft);
+  white-space:pre;
+}
+@media(min-width:760px){
+  .terminal pre{font-size:.86rem}
+}
+.terminal pre .h{color:var(--text);font-weight:500}
+.terminal pre .a{color:var(--green)}
+.terminal pre .d{color:var(--red)}
+.terminal pre .m{color:var(--cyan)}
+.terminal pre .y{color:var(--yellow)}
+.terminal pre .x{color:var(--accent)}
+.terminal pre .mt{color:var(--muted)}
+.terminal pre .rl{color:var(--accent);font-weight:500}
+.terminal pre .rule{color:var(--muted)}
+.terminal pre .bar-fill{color:var(--green)}
+.terminal pre i{font-style:normal;color:var(--muted)}
+
+.caption{
+  font-size:.76rem;color:var(--muted);
+  margin-top:-.2rem;
+  letter-spacing:.04em;
+}
+
+/* ── Commands list ─────────────────────────────── */
+
+.subcmd{
+  margin:2.6rem 0 0;
+  padding-top:2rem;
+  border-top:1px dashed var(--line);
+}
+.subcmd:first-of-type{border-top:0;padding-top:0;margin-top:1.5rem}
+.subcmd .head{
+  display:flex;align-items:baseline;gap:1ch;flex-wrap:wrap;
+  margin-bottom:.4rem;
+}
+.subcmd .name{
+  font-size:1.6rem;font-weight:700;
+  color:var(--accent);letter-spacing:-.01em;
+}
+.subcmd .sig{color:var(--muted);font-size:.85rem}
+.subcmd p{margin-top:.2rem}
+
+/* ── Install paths ─────────────────────────────── */
+
+.install{
+  display:grid;grid-template-columns:1fr;gap:1rem;
+  margin:1.5rem 0 0;
+}
+.install .path{
+  background:var(--bg-2);
+  border:1px solid var(--line);
+  padding:1.2rem 1.4rem;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:.55rem;
+  border-radius:2px;
+}
+@media(min-width:760px){
+  .install .path{grid-template-columns:160px 1fr;gap:1rem 1.6rem;align-items:center}
+  .install .path .cmdblock{grid-column:2}
+}
+.install .path .label{
+  font-size:.72rem;color:var(--muted);
+  letter-spacing:.16em;text-transform:uppercase;
+}
+.install .path .desc{
+  font-size:.86rem;color:var(--text-soft);margin:0;
+}
+@media(min-width:760px){
+  .install .path .label,.install .path .desc{grid-column:1;grid-row:auto}
+  .install .path .label{align-self:end}
+  .install .path .desc{align-self:start;font-size:.78rem;color:var(--muted);line-height:1.4}
+}
+.install .path .cmdblock{padding:.7rem 1rem;font-size:.86rem}
+
+/* ── Notes ─────────────────────────────────────── */
+
+.notes{
+  display:grid;gap:1.4rem;
+  grid-template-columns:1fr;
+  margin-top:1.4rem;
+}
+@media(min-width:760px){
+  .notes{grid-template-columns:1fr 1fr}
+}
+.notes .item{
+  border-left:2px solid var(--accent);
+  padding:.2rem 0 .2rem 1.1rem;
+}
+.notes .item h4{
+  margin:0 0 .3rem;font-size:.95rem;font-weight:600;
+  color:var(--text);
+}
+.notes .item p{margin:0;font-size:.88rem}
+
+ul.bare{list-style:none;padding:0;margin:.6rem 0 1rem;color:var(--text-soft)}
+ul.bare li{padding:.15rem 0;font-size:.88rem}
+ul.bare li::before{
+  content:"›  ";
+  color:var(--accent);
+  font-weight:600;
+}
+
+/* ── Footer ────────────────────────────────────── */
+
+footer{
+  margin-top:8rem;
+  padding-top:2rem;
+  border-top:1px solid var(--line);
+  display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;
+  font-size:.76rem;color:var(--muted);
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+footer a{color:var(--muted);border-bottom-color:transparent}
+footer a:hover{color:var(--accent);border-bottom-color:var(--accent-soft)}
+
+/* ── Subtle reveal on scroll ───────────────────── */
+
+.reveal{opacity:0;transform:translateY(8px);transition:opacity .45s ease, transform .45s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  .hero h1 .cursor{animation:none}
+}
+</style>
+
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="topline">
+    <span>skill-graveyard / 0.6.0</span>
+    <span class="right">
+      <a href="https://github.com/sfrangulov/skill-graveyard">github ↗</a>
+      <a href="https://www.npmjs.com/package/skill-graveyard">npm ↗</a>
+      <a href="#install">install</a>
+    </span>
+  </div>
+
+  <header class="hero">
+    <h1>skill<span class="dash">-</span>graveyard<span class="cursor"></span></h1>
+    <p class="tag">audit which Claude Code skills you <em>actually</em> use — same parser surfaces both <em>dead installs</em> and <em>hallucinated invocations</em>, so it's not just a graveyard, it's a two-sided audit of where your setup is over- and under-provisioned.</p>
+
+    <div class="cmdblock">
+      <span class="prompt">$</span>
+      <span class="cmd" id="hero-cmd">npx skill-graveyard</span>
+      <button data-copy="npx skill-graveyard" type="button">copy</button>
+    </div>
+
+    <div class="meta">
+      <span><b>local-only.</b> no network, no telemetry.</span>
+      <span><b>node ≥ 18.</b> zero config.</span>
+      <span><b>mit.</b></span>
+    </div>
+  </header>
+
+  <!-- ── 01 ───────────────────────────────────── -->
+  <section class="reveal" id="buckets">
+    <p class="section-head"><span class="num">01</span> what it sorts</p>
+    <h2>Four buckets. One parser.</h2>
+    <p class="lede">Each skill name that appears in your local <code>~/.claude/projects/**/*.jsonl</code> ends up in exactly one of these.</p>
+
+    <div class="buckets">
+      <div class="bucket active">
+        <div class="label"><span class="marker">▲</span><span>active · keep</span></div>
+        <h4>installed AND invoked</h4>
+        <p>The skill is present in <code>~/.claude/skills/</code>, an <code>~/.agents/skills/</code> dir, a plugin install path, or a project-scoped <code>.claude/skills/</code> — and Claude actually called it within the audit window.</p>
+      </div>
+      <div class="bucket dead">
+        <div class="label"><span class="marker">▼</span><span>dead · removal candidate</span></div>
+        <h4>installed but zero invocations</h4>
+        <p>Sits on disk loading its description into every session's context — but Claude never calls it. <code>prune</code> emits source-aware removal commands; for plugins where every skill is dead, it rolls up to a single uninstall.</p>
+      </div>
+      <div class="bucket missing">
+        <div class="label"><span class="marker">?</span><span>missing · likely external</span></div>
+        <h4>invoked but source not located</h4>
+        <p>The call resolved successfully but no <code>SKILL.md</code> matches in any scanned path. Usually a skill registered by another framework Claude Code runs inside (paperclip, custom orchestrators) or installed somewhere unconventional.</p>
+      </div>
+      <div class="bucket hallucinated">
+        <div class="label"><span class="marker">✗</span><span>hallucinated · model error</span></div>
+        <h4>invoked and the runtime errored</h4>
+        <p>Mostly Claude confusing tool names with skill names (<code>bash</code>, <code>read</code>, <code>edit</code>). <code>suggest</code> classifies these into actionable groups: tool/skill confusion, likely typo, external framework, unclassified.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 02 ───────────────────────────────────── -->
+  <section class="reveal" id="audit">
+    <p class="section-head"><span class="num">02</span> live audit</p>
+    <h2>Run it once and see the shape of your skill library.</h2>
+    <p>Below: the actual output from the author's machine. <span style="color:var(--muted)">160 sessions, 379 skill calls, 30-day window.</span></p>
+
+    <div class="terminal">
+      <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ skill-graveyard --days 30</span></div>
+<pre><span class="rule">────────────────────────────────────────────────────────────</span>
+ <span class="h">skill-graveyard</span> <span class="mt">— 30d audit</span>
+ <span class="h">65</span> installed   <span class="a">13 active</span> · <span class="d">52 dead</span> · <span class="m">4 missing</span>
+              <span class="bar-fill">██████</span>                            <span class="mt">20% used</span>
+ <span class="mt">160 sessions, 379 calls, 93 errored</span>
+ <span class="y">+29</span><span class="mt"> hallucinated names (telemetry)</span>
+<span class="rule">────────────────────────────────────────────────────────────</span>
+
+<span class="a">ACTIVE (13)</span>  <span class="mt">installed and invoked — keep</span>
+  superpowers:brainstorming                <span class="bar-fill">████████████████</span>  83  <i>just now</i>  <i>plugin:superpowers</i>
+  superpowers:writing-plans                <span class="bar-fill">███████████</span>       56  <i>just now</i>  <i>plugin:superpowers</i>
+  superpowers:subagent-driven-development  <span class="bar-fill">██████████</span>        53  <i>just now</i>  <i>plugin:superpowers</i>
+  superpowers:systematic-debugging         <span class="bar-fill">███</span>               13  <i>16h ago</i>   <i>plugin:superpowers</i>
+  frontend-design:frontend-design          ▏                  3  <i>just now</i>  <i>plugin:frontend-design</i>
+  task-management                          ▏                  1  <i>15h ago</i>   <i>user</i>
+  …
+
+<span class="m">MISSING (4)</span>  <span class="mt">resolved but source not located — project-scoped or external framework</span>
+  paperclip                47 calls  <i>(14d ago)</i>
+  para-memory-files        15 calls  <i>(14d ago)</i>
+  paperclip-create-agent    5 calls  <i>(14d ago)</i>
+  update-config             3 calls  <i>(4h ago)</i>
+  <span class="rl">→ skill-graveyard suggest</span>    <i>for actionable classification</i>
+
+<span class="y">HALLUCINATED (29 names, 91 calls)</span>  <span class="mt">Claude→tool/skill confusion, mostly noise</span>
+  <i>top:</i> bash (18), read (18), batch (6), commit (6), edit (6)
+  <span class="rl">→ skill-graveyard suggest</span>    <i>for actionable classification</i>
+
+<span class="d">DEAD (52)</span>  <span class="mt">installed, 0 invocations in 30d — removal candidates</span>
+
+  <i>plugin rollups (4)</i>  <span class="mt">every skill of the plugin is dead — uninstall whole plugin</span>
+    plugin:figma          9 skills  <i>claude /plugin remove figma@claude-plugins-official</i>
+    plugin:claude-mem     6 skills  <i>claude /plugin remove claude-mem@thedotmack</i>
+    plugin:supabase       2 skills  <i>claude /plugin remove supabase@claude-plugins-official</i>
+    plugin:skill-creator  1 skill   <i>claude /plugin remove skill-creator@claude-plugins-official</i>
+
+  <i>individual (34)</i>
+    user  (26)
+      adr-skill, ai-elements, ai-sdk, canvas-design, docker-expert,
+      github-actions-docs, helm-chart-scaffolding, helm-debugging,
+      …
+      <span class="rl">→ skill-graveyard prune --only user</span>
+</pre>
+    </div>
+    <p class="caption">captured 2026-04-29 from sfrangulov's machine. the headline answer: <span style="color:var(--accent)">20% of installed skills carry their weight; 80% are inert metadata in every session's context.</span></p>
+  </section>
+
+  <!-- ── 03 ───────────────────────────────────── -->
+  <section class="reveal" id="commands">
+    <p class="section-head"><span class="num">03</span> five subcommands</p>
+    <h2>Audit, then act.</h2>
+    <p class="lede"><code>audit</code> is the default and is what you usually run. The other four turn its output into actions.</p>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">audit</span>
+        <span class="sig">[--days N] [--only active|dead|missing|hallucinated] [--json]</span>
+      </div>
+      <p>Default command — shown above. Sorts every skill name into the four buckets, with a plugin-rollup pass that collapses fully-dead plugins into single uninstall rows.</p>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">prune</span>
+        <span class="sig">[--apply] [--only user|agents|plugin]</span>
+      </div>
+      <p>Reads the audit and emits a removal plan. Source-aware: <code>user</code>/<code>agents</code> get <code>unlink</code> (executed with <code>--apply</code>); <code>plugin</code> gets the slash command to paste into Claude Code (always print-only — invoking <code>/plugin remove</code> from outside the runtime is fragile); <code>project</code> is left alone.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ skill-graveyard prune</span></div>
+<pre><span class="h">skill-graveyard prune — 30d window</span>  <span class="mt">(mode: dry-run)</span>
+plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span>
+
+<span class="d">WOULD UNLINK (26)</span>
+  user (26)
+    ~/.claude/skills/adr-skill
+    ~/.claude/skills/ai-elements
+    ~/.claude/skills/ai-sdk
+    ~/.claude/skills/canvas-design
+    ~/.claude/skills/docker-expert
+    ~/.claude/skills/github-actions-docs
+    …
+
+<span class="y">PLUGIN REMOVALS (4)</span>  <span class="mt">run inside Claude Code:</span>
+  claude /plugin remove figma@claude-plugins-official  <i># 9 skills, all dead</i>
+  claude /plugin remove claude-mem@thedotmack          <i># 6 skills, all dead</i>
+  claude /plugin remove supabase@claude-plugins-official  <i># 2 skills</i>
+  claude /plugin remove skill-creator@claude-plugins-official  <i># 1 skill</i>
+
+<span class="mt">re-run with --apply to execute the unlinks (plugin removals always print only)</span>
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">suggest</span>
+        <span class="sig">[--days N] [--json]</span>
+      </div>
+      <p>Classifies <code>missing</code> and <code>hallucinated</code> rows into actionable buckets so the noise becomes triage-able.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ skill-graveyard suggest</span></div>
+<pre><span class="h">skill-graveyard suggest — 30d window</span>
+33 unique names, 161 calls, <span class="x">3 actionable groups</span>
+
+<span class="m">EXTERNAL FRAMEWORK (3 names, 67 calls)</span>
+  <span class="mt">registered by another framework Claude Code runs inside — document in CLAUDE.md</span>
+  <i>~/.paperclip/</i>  3 names, 67 calls
+    paperclip, para-memory-files, paperclip-create-agent
+
+<span class="y">TOOL/SKILL CONFUSION (9 names, 56 calls)</span>
+  <span class="mt">Claude invoked a built-in CC tool name as a skill — known model failure mode</span>
+  bash (18), read (18), edit (6), Read (6), Bash (3), agent (2),
+  grep (1), write (1), Write (1)
+
+<span class="mt">UNCLASSIFIED (21 names, 38 calls)</span>
+  <span class="mt">no matching pattern — review manually</span>
+  batch (6), commit (6), update-config (3), pdf (3), agents (2),
+  help (2), shell (2), code (1), …
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">projects</span>
+        <span class="sig">[--days N] [--json]</span>
+      </div>
+      <p>Same parser, different cut: groups every skill invocation by the <code>cwd</code> recorded in the session log. Surfaces project-scoped vs. global usage and per-project hallucinations.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ skill-graveyard projects</span></div>
+<pre><span class="rule">────────────────────────────────────────────────────────────</span>
+ <span class="h">skill-graveyard projects</span> <span class="mt">— 30d</span>
+ <span class="h">28</span> projects   <span class="mt">167 sessions, 379 skill calls</span>
+<span class="rule">────────────────────────────────────────────────────────────</span>
+
+<span class="h">~/projects/ai-data-analyst</span>  <span class="mt">53 ses, 127 calls, 11 skills</span>
+    superpowers:brainstorming                  50×
+    superpowers:writing-plans                  32×
+    superpowers:subagent-driven-development    31×
+  <span class="y">?</span> <span class="y">update-config</span>                               3×
+    find-skills                                 1×
+    frontend-design:frontend-design             1×
+  <i>…and 3 more</i>
+
+<span class="h">~/.claude-mem/observer-sessions</span>  <span class="mt">33 ses, 93 calls, 30 skills · 93 errored</span>
+  <span class="d">✗</span> <span class="d">bash</span>      18×
+  <span class="d">✗</span> <span class="d">read</span>      18×
+  <span class="d">✗</span> <span class="d">batch</span>      6×
+  <span class="d">✗</span> <span class="d">commit</span>     6×
+  <i>…and 26 more</i>
+
+<span class="h">~/projects/furnitech2/furnitech-platform</span>  <span class="mt">18 ses, 52 calls, 8 skills</span>
+    superpowers:brainstorming                  18×
+    superpowers:writing-plans                  12×
+    …
+
+<span class="mt">sorted by total skill calls. ✗ = hallucinated (errored). ? = invoked but not installed.</span>
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">cost</span>
+        <span class="sig">[--days N] [--json]</span>
+      </div>
+      <p>Estimates how many tokens your skill metadata consumes per session vs. how many of those tokens cover skills Claude actually invokes. Each <code>SKILL.md</code> description is loaded into the <code>Skill</code> tool definition on every API request — even if the skill is never invoked.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ skill-graveyard cost</span></div>
+<pre><span class="rule">────────────────────────────────────────────────────────────</span>
+ <span class="h">skill-graveyard cost</span> <span class="mt">— 30d window</span>
+ 65 skills × avg 48 desc tokens = <span class="x">~3.1K loaded per session</span>
+ × 160 sessions ≈ <span class="x">501.4K</span> of skill-metadata loaded over window
+ of which <span class="d">~497.2K (99%)</span> loaded for skills never invoked (52 dead)
+<span class="rule">────────────────────────────────────────────────────────────</span>
+
+<span class="m">HOOK INJECTIONS</span>  <span class="mt">per-session text from SessionStart hooks</span>
+  SessionStart   2541 t/sess  × 72 sessions  = <span class="x">182.9K</span>
+
+<span class="d">TOP WASTERS (15 of 64)</span>  <span class="mt">desc tokens × sessions where never invoked</span>
+  playwright-best-practices               <i>user</i>            207 t × 0/160     <span class="x">33.1K</span>
+  figma:figma-generate-design             <i>plugin:figma</i>    185 t × 0/160     <span class="x">29.6K</span>
+  ai-sdk                                  <i>user</i>            152 t × 0/160     <span class="x">24.3K</span>
+  supabase:supabase                       <i>plugin:supabase</i> 125 t × 0/160     <span class="x">20.0K</span>
+  figma:figma-use                         <i>plugin:figma</i>    108 t × 0/160     <span class="x">17.3K</span>
+  …
+
+<span class="a">EARNING THEIR KEEP</span>  <span class="mt">top by invocation rate</span>
+  superpowers:brainstorming   <i>plugin:superpowers</i>  34 t × 62/160     3.3K
+  superpowers:writing-plans   <i>plugin:superpowers</i>  17 t × 49/160     1.9K
+  superpowers:subagent…       <i>plugin:superpowers</i>  12 t × 49/160     1.3K
+
+<span class="mt">note: token counts via cl100k_base (proxy for Claude tokenization;</span>
+<span class="mt">off by 5–15% in practice).</span>
+</pre>
+      </div>
+    </article>
+
+    <p class="caption">all output above is real — captured locally with <code>npx tsx src/cli.ts &lt;cmd&gt; --days 30 --no-color</code>.</p>
+  </section>
+
+  <!-- ── 04 ───────────────────────────────────── -->
+  <section class="reveal" id="install">
+    <p class="section-head"><span class="num">04</span> install</p>
+    <h2>Three ways in.</h2>
+
+    <div class="install">
+      <div class="path">
+        <span class="label">one-off</span>
+        <p class="desc">No install. Just run it. Best for the first try.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx skill-graveyard</span><button data-copy="npx skill-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">global cli</span>
+        <p class="desc">Installs the binary on your <code>PATH</code>.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npm i -g skill-graveyard</span><button data-copy="npm i -g skill-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">claude code plugin</span>
+        <p class="desc">Adds the <code>/audit-skills</code> slash command (planned via plugin registry).</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">claude /plugin install skill-graveyard</span><button data-copy="claude /plugin install skill-graveyard" type="button">copy</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 05 ───────────────────────────────────── -->
+  <section class="reveal" id="notes">
+    <p class="section-head"><span class="num">05</span> notes</p>
+    <h2>Things worth knowing.</h2>
+
+    <div class="notes">
+      <div class="item">
+        <h4>What it reads</h4>
+        <p><code>~/.claude/projects/**/*.jsonl</code> for invocations and cwd; <code>installed_plugins.json</code> for plugin paths; <code>~/.claude/skills/</code>, <code>~/.agents/skills/</code>, plugin install dirs, and <code>&lt;cwd&gt;/.claude/skills/</code> walking up to <code>$HOME</code> for project-scoped skills.</p>
+      </div>
+      <div class="item">
+        <h4>Token estimates use cl100k_base</h4>
+        <p>Anthropic doesn't ship a public tokenizer for Claude 3+. <code>cl100k_base</code> (gpt-tokenizer) is the closest defensible proxy — expect 5–15% drift. Anthropic prompt caching reduces dollar cost; loaded tokens still consume your context window and rate-limit budget.</p>
+      </div>
+      <div class="item">
+        <h4>It does NOT auto-disable plugin skills</h4>
+        <p>Plugin removal is a Claude Code slash command and invoking it from outside the runtime is fragile, so <code>prune</code> only prints the command. Run it inside Claude Code yourself.</p>
+      </div>
+      <div class="item">
+        <h4>It does NOT touch project-scoped skills</h4>
+        <p>Skills under <code>&lt;project&gt;/.claude/skills/</code> are intentional per-project artifacts; <code>prune</code> ignores them.</p>
+      </div>
+      <div class="item">
+        <h4>It does NOT phone home</h4>
+        <p>All analysis is local. No telemetry, no network calls, no hidden uploads. The CLI binary's only runtime dependency is <code>gpt-tokenizer</code>.</p>
+      </div>
+      <div class="item">
+        <h4>Pipe to jq</h4>
+        <p>Every subcommand accepts <code>--json</code> for machine-readable output. Custom queries like <code>--json | jq '.rows[] | select(.category=="dead") | .invokeName'</code> just work.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>skill-graveyard 0.6.0 · MIT · 2026</span>
+    <span><a href="https://github.com/sfrangulov/skill-graveyard">github.com/sfrangulov/skill-graveyard</a></span>
+  </footer>
+
+</div>
+
+<script>
+// copy-to-clipboard
+document.querySelectorAll('button[data-copy]').forEach(btn=>{
+  btn.addEventListener('click',async()=>{
+    const text=btn.dataset.copy;
+    try{await navigator.clipboard.writeText(text);}catch{
+      const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy')}catch{}finally{document.body.removeChild(ta)}
+    }
+    const prev=btn.textContent;btn.textContent='copied';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent=prev;btn.classList.remove('copied')},1400);
+  });
+});
+
+// reveal on scroll
+const io=new IntersectionObserver((entries)=>{
+  for(const e of entries){
+    if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}
+  }
+},{rootMargin:'-40px 0px',threshold:0.04});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>
