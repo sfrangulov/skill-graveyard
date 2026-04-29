@@ -4,7 +4,14 @@ import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { enumeratePluginSources, enumerateGitSources } from "./outdated.js";
+import {
+  enumeratePluginSources,
+  enumerateGitSources,
+  buildReport,
+  compareSemver,
+  type GitSource,
+  type PluginSource,
+} from "./outdated.js";
 
 async function withClaudeDir<T>(
   fn: (claudeDir: string) => Promise<T>,
@@ -155,4 +162,155 @@ test("enumerateGitSources captures remote URL, branch, and local SHA", async () 
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ----- compareSemver tests -----
+
+test("compareSemver returns negative when local is older", () => {
+  assert.equal(compareSemver("1.2.3", "1.2.4") < 0, true);
+  assert.equal(compareSemver("1.2.3", "1.3.0") < 0, true);
+  assert.equal(compareSemver("1.2.3", "2.0.0") < 0, true);
+});
+
+test("compareSemver returns 0 for equal versions", () => {
+  assert.equal(compareSemver("1.2.3", "1.2.3"), 0);
+});
+
+test("compareSemver returns positive when local is newer", () => {
+  assert.equal(compareSemver("1.2.4", "1.2.3") > 0, true);
+});
+
+test("compareSemver tolerates v-prefix and pre-release suffix", () => {
+  assert.equal(compareSemver("v1.2.3", "1.2.3"), 0);
+  assert.equal(compareSemver("1.2.3-beta", "1.2.3"), 0);
+});
+
+// ----- buildReport helpers -----
+
+function plugin(overrides: Partial<PluginSource> = {}): PluginSource {
+  return {
+    pluginId: "foo@market",
+    pluginName: "foo",
+    marketplaceName: "market",
+    marketplaceRepo: "owner/market",
+    installedVersion: "1.0.0",
+    gitCommitSha: null,
+    installPath: "/x",
+    affectedSkills: [],
+    ...overrides,
+  };
+}
+
+function gitSource(overrides: Partial<GitSource> = {}): GitSource {
+  return {
+    rootPath: "/home/u/repo",
+    displayName: "~/repo",
+    remoteUrl: "https://example.com/u/repo.git",
+    branch: "main",
+    installedSha: "a".repeat(40),
+    affectedSkills: ["one"],
+    ...overrides,
+  };
+}
+
+// ----- buildReport plugin tests -----
+
+test("buildReport classifies plugin as outdated when marketplace has newer version", () => {
+  const marketplaces = new Map([
+    ["owner/market", { data: { plugins: [{ name: "foo", version: "1.1.0" }] } }],
+  ]);
+  const r = buildReport({
+    plugins: [plugin()],
+    gits: [],
+    marketplaces,
+    gitRemoteShas: new Map(),
+  });
+  assert.equal(r.counters.outdated, 1);
+  assert.equal(r.rows[0]!.installedVersion, "1.0.0");
+  assert.equal(r.rows[0]!.latestVersion, "1.1.0");
+  assert.deepEqual(r.rows[0]!.upgradeHint, ["claude plugin update foo@market"]);
+});
+
+test("buildReport classifies plugin as up-to-date when versions match", () => {
+  const marketplaces = new Map([
+    ["owner/market", { data: { plugins: [{ name: "foo", version: "1.0.0" }] } }],
+  ]);
+  const r = buildReport({ plugins: [plugin()], gits: [], marketplaces, gitRemoteShas: new Map() });
+  assert.equal(r.counters.upToDate, 1);
+  assert.equal(r.rows[0]!.status, "up-to-date");
+});
+
+test("buildReport flags installed-version 'unknown' as outdated with reinstall hint", () => {
+  const marketplaces = new Map([
+    ["owner/market", { data: { plugins: [{ name: "foo", version: "1.0.0" }] } }],
+  ]);
+  const r = buildReport({
+    plugins: [plugin({ installedVersion: "unknown" })],
+    gits: [],
+    marketplaces,
+    gitRemoteShas: new Map(),
+  });
+  assert.equal(r.counters.outdated, 1);
+  assert.deepEqual(r.rows[0]!.upgradeHint, [
+    "claude plugin remove foo@market",
+    "claude plugin install foo@market",
+  ]);
+});
+
+test("buildReport classifies plugin without marketplace as unknown", () => {
+  const r = buildReport({
+    plugins: [plugin({ marketplaceRepo: null })],
+    gits: [],
+    marketplaces: new Map(),
+    gitRemoteShas: new Map(),
+  });
+  assert.equal(r.counters.unknown, 1);
+  assert.equal(r.rows[0]!.reason, "no registered marketplace");
+});
+
+test("buildReport marks marketplace fetch failure as errored for all its plugins", () => {
+  const marketplaces = new Map([["owner/market", { error: "503 Service Unavailable" }]]);
+  const r = buildReport({
+    plugins: [plugin()],
+    gits: [],
+    marketplaces,
+    gitRemoteShas: new Map(),
+  });
+  assert.equal(r.counters.errored, 1);
+  assert.equal(r.rows[0]!.reason, "503 Service Unavailable");
+});
+
+// ----- buildReport git tests -----
+
+test("buildReport classifies git source up-to-date when SHAs match", () => {
+  const sha = "b".repeat(40);
+  const r = buildReport({
+    plugins: [],
+    gits: [gitSource({ installedSha: sha })],
+    marketplaces: new Map(),
+    gitRemoteShas: new Map([["https://example.com/u/repo.git@main", sha]]),
+  });
+  assert.equal(r.counters.upToDate, 1);
+});
+
+test("buildReport classifies git source outdated when remote SHA differs", () => {
+  const r = buildReport({
+    plugins: [],
+    gits: [gitSource()],
+    marketplaces: new Map(),
+    gitRemoteShas: new Map([["https://example.com/u/repo.git@main", "c".repeat(40)]]),
+  });
+  assert.equal(r.counters.outdated, 1);
+  assert.deepEqual(r.rows[0]!.upgradeHint, ["git -C /home/u/repo pull --ff-only"]);
+});
+
+test("buildReport classifies git source unknown when no branch (detached HEAD)", () => {
+  const r = buildReport({
+    plugins: [],
+    gits: [gitSource({ branch: null })],
+    marketplaces: new Map(),
+    gitRemoteShas: new Map(),
+  });
+  assert.equal(r.counters.unknown, 1);
+  assert.equal(r.rows[0]!.reason, "detached HEAD");
 });
