@@ -1,37 +1,60 @@
 #!/usr/bin/env node
-import { runAudit } from "./audit.js";
-import { formatJson, formatReport } from "./format.js";
+import { runAudit, type Category } from "./audit.js";
+import {
+  formatJson,
+  formatPruneReport,
+  formatReport,
+  formatSuggestReport,
+} from "./format.js";
+import { runPrune, type PruneSourceFilter } from "./prune.js";
+import { runSuggest } from "./suggest.js";
 
-import type { Category } from "./audit.js";
+type Command = "audit" | "prune" | "suggest" | "help" | "version";
 
 interface ParsedArgs {
-  command: "audit" | "help" | "version";
+  command: Command;
   days: number;
   json: boolean;
   color: boolean;
-  filter?: Category;
   claudeDir?: string;
+  auditFilter?: Category;
+  pruneApply: boolean;
+  pruneOnly?: PruneSourceFilter;
 }
 
-const HELP = `skill-graveyard — audit which Claude Code skills you actually use
+const HELP = `skill-graveyard — audit Claude Code skills you actually use
 
 USAGE
   skill-graveyard [audit] [options]
-  skill-graveyard --help
-  skill-graveyard --version
+  skill-graveyard prune [options]
+  skill-graveyard suggest [options]
+  skill-graveyard --help | --version
 
-OPTIONS
+COMMANDS
+  audit      (default) classify every skill into active | dead | missing | hallucinated
+  prune      generate (and optionally execute) removal commands for dead skills
+  suggest    classify hallucinated/missing into actionable buckets
+
+COMMON OPTIONS
   --days <n>            window in days (default: 30)
   --json                emit machine-readable JSON instead of a table
   --no-color            disable ANSI colors
-  --only <category>     filter to one of: active | missing | hallucinated | dead
   --claude-dir <path>   override Claude home directory (default: ~/.claude)
+
+AUDIT OPTIONS
+  --only <category>     filter to one of: active | missing | hallucinated | dead
+
+PRUNE OPTIONS
+  --apply               execute unlinks for user/agents skills (plugin removals always print only)
+  --only <kind>         filter to one of: user | agents | plugin
 
 EXAMPLES
   skill-graveyard
   skill-graveyard --days 14
-  skill-graveyard --only dead
-  skill-graveyard --json | jq '.rows[] | select(.category=="hallucinated")'
+  skill-graveyard prune
+  skill-graveyard prune --apply
+  skill-graveyard suggest
+  skill-graveyard --json | jq '.rows[] | select(.category=="dead") | .invokeName'
 `;
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -40,13 +63,19 @@ function parseArgs(argv: string[]): ParsedArgs {
     days: 30,
     json: false,
     color: process.stdout.isTTY === true,
+    pruneApply: false,
   };
 
-  const positional = argv.filter((a) => !a.startsWith("-"));
-  if (positional[0] === "audit") positional.shift();
-  if (positional[0] === "help") args.command = "help";
+  let i = 0;
+  if (argv[0] && !argv[0].startsWith("-")) {
+    const cmd = argv[0];
+    if (cmd === "audit" || cmd === "prune" || cmd === "suggest" || cmd === "help") {
+      args.command = cmd;
+      i = 1;
+    }
+  }
 
-  for (let i = 0; i < argv.length; i++) {
+  for (; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
       case "-h":
@@ -74,23 +103,31 @@ function parseArgs(argv: string[]): ParsedArgs {
       case "--color":
         args.color = true;
         break;
-      case "--only": {
-        const v = argv[++i];
-        if (
-          v !== "active" &&
-          v !== "dead" &&
-          v !== "missing" &&
-          v !== "hallucinated"
-        ) {
-          fatal(`--only must be active|dead|missing|hallucinated, got: ${v}`);
-        }
-        args.filter = v;
-        break;
-      }
       case "--claude-dir": {
         const v = argv[++i];
         if (!v) fatal("--claude-dir requires a path");
         args.claudeDir = v;
+        break;
+      }
+      case "--apply":
+        args.pruneApply = true;
+        break;
+      case "--only": {
+        const v = argv[++i];
+        if (!v) fatal("--only requires a value");
+        if (args.command === "audit") {
+          if (v !== "active" && v !== "dead" && v !== "missing" && v !== "hallucinated") {
+            fatal(`audit --only must be active|dead|missing|hallucinated, got: ${v}`);
+          }
+          args.auditFilter = v;
+        } else if (args.command === "prune") {
+          if (v !== "user" && v !== "agents" && v !== "plugin") {
+            fatal(`prune --only must be user|agents|plugin, got: ${v}`);
+          }
+          args.pruneOnly = v;
+        } else {
+          fatal(`--only is not valid for the ${args.command} command`);
+        }
         break;
       }
       default:
@@ -117,12 +154,43 @@ async function main() {
     return;
   }
 
-  const report = await runAudit({ days: args.days, claudeDir: args.claudeDir });
+  if (args.command === "audit") {
+    const report = await runAudit({ days: args.days, claudeDir: args.claudeDir });
+    if (args.json) {
+      process.stdout.write(formatJson(report) + "\n");
+    } else {
+      process.stdout.write(
+        formatReport(report, { color: args.color, filter: args.auditFilter }) + "\n",
+      );
+    }
+    return;
+  }
 
-  if (args.json) {
-    process.stdout.write(formatJson(report) + "\n");
-  } else {
-    process.stdout.write(formatReport(report, { color: args.color, filter: args.filter }) + "\n");
+  if (args.command === "prune") {
+    const report = await runPrune({
+      days: args.days,
+      apply: args.pruneApply,
+      only: args.pruneOnly,
+      claudeDir: args.claudeDir,
+    });
+    if (args.json) {
+      process.stdout.write(formatJson(report) + "\n");
+    } else {
+      process.stdout.write(formatPruneReport(report, { color: args.color }) + "\n");
+    }
+    const anyFailed = report.applied.some((e) => e.status === "failed");
+    if (anyFailed) process.exit(1);
+    return;
+  }
+
+  if (args.command === "suggest") {
+    const report = await runSuggest({ days: args.days, claudeDir: args.claudeDir });
+    if (args.json) {
+      process.stdout.write(formatJson(report) + "\n");
+    } else {
+      process.stdout.write(formatSuggestReport(report, { color: args.color }) + "\n");
+    }
+    return;
   }
 }
 

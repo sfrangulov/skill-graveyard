@@ -21,6 +21,7 @@ export interface UsageStat {
   uniqueSessions: number;
   lastCallAt: string | null;
   firstCallAt: string | null;
+  observedCwds: string[];
 }
 
 export type Category = "active" | "dead" | "missing" | "hallucinated";
@@ -32,6 +33,16 @@ export interface AuditRow {
   category: Category;
 }
 
+export interface PluginGroup {
+  pluginName: string;
+  pluginScope: string;
+  totalSkills: number;
+  deadSkills: number;
+  activeSkills: number;
+  invocationCount: number;
+  rollupCandidate: boolean;
+}
+
 export interface AuditReport {
   generatedAt: string;
   windowDays: number;
@@ -41,6 +52,7 @@ export interface AuditReport {
   totalErroredCalls: number;
   paths: ClaudePaths;
   rows: AuditRow[];
+  pluginGroups: PluginGroup[];
 }
 
 export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
@@ -81,6 +93,7 @@ export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
   for (const s of installed) installedByInvoke.set(s.invokeName, s);
 
   const usageMap = new Map<string, UsageStat>();
+  const cwdSets = new Map<string, Set<string>>();
   for (const call of allCalls) {
     const u =
       usageMap.get(call.skill) ??
@@ -91,6 +104,7 @@ export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
         uniqueSessions: 0,
         lastCallAt: null,
         firstCallAt: null,
+        observedCwds: [],
       } satisfies UsageStat);
     u.totalCalls++;
     if (call.errored) u.erroredCalls++;
@@ -100,6 +114,15 @@ export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
       if (!u.lastCallAt || ts > u.lastCallAt) u.lastCallAt = ts;
     }
     usageMap.set(call.skill, u);
+    if (call.cwd) {
+      const set = cwdSets.get(call.skill) ?? new Set<string>();
+      set.add(call.cwd);
+      cwdSets.set(call.skill, set);
+    }
+  }
+  for (const [name, set] of cwdSets) {
+    const u = usageMap.get(name);
+    if (u) u.observedCwds = [...set].sort();
   }
 
   const sessionsByInvoke = new Map<string, Set<string>>();
@@ -148,6 +171,8 @@ export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
     return a.invokeName.localeCompare(b.invokeName);
   });
 
+  const pluginGroups = computePluginGroups(rows);
+
   return {
     generatedAt: new Date().toISOString(),
     windowDays: opts.days,
@@ -157,5 +182,42 @@ export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
     totalErroredCalls: allCalls.filter((c) => c.errored).length,
     paths,
     rows,
+    pluginGroups,
   };
+}
+
+function computePluginGroups(rows: AuditRow[]): PluginGroup[] {
+  const byKey = new Map<string, PluginGroup>();
+  for (const row of rows) {
+    const inst = row.installed;
+    if (!inst || inst.source.kind !== "plugin") continue;
+    const key = `${inst.source.pluginName}@${inst.source.pluginScope}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = {
+        pluginName: inst.source.pluginName,
+        pluginScope: inst.source.pluginScope,
+        totalSkills: 0,
+        deadSkills: 0,
+        activeSkills: 0,
+        invocationCount: 0,
+        rollupCandidate: false,
+      };
+      byKey.set(key, g);
+    }
+    g.totalSkills++;
+    if (row.category === "dead") g.deadSkills++;
+    else if (row.category === "active") g.activeSkills++;
+    g.invocationCount += row.usage?.totalCalls ?? 0;
+  }
+  const out = [...byKey.values()];
+  for (const g of out) {
+    g.rollupCandidate = g.totalSkills > 0 && g.deadSkills === g.totalSkills;
+  }
+  out.sort((a, b) => {
+    if (a.rollupCandidate !== b.rollupCandidate) return a.rollupCandidate ? -1 : 1;
+    if (a.deadSkills !== b.deadSkills) return b.deadSkills - a.deadSkills;
+    return a.pluginName.localeCompare(b.pluginName);
+  });
+  return out;
 }
