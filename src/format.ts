@@ -41,11 +41,11 @@ function colors(use: boolean): typeof C {
 }
 
 function bar(value: number, max: number, width: number): string {
-  if (max <= 0 || value <= 0) return "░".repeat(width);
+  if (max <= 0 || value <= 0) return " ".repeat(width);
   const exact = (value / max) * width;
-  if (exact < 1) return "▏" + "░".repeat(width - 1);
+  if (exact < 1) return "▏" + " ".repeat(width - 1);
   const filled = Math.min(width, Math.round(exact));
-  return "█".repeat(filled) + "░".repeat(width - filled);
+  return "█".repeat(filled) + " ".repeat(width - filled);
 }
 
 function rule(width: number, c: typeof C, char = "─"): string {
