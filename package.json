@@ -19,10 +19,19 @@
   "scripts": {
     "dev": "tsx src/cli.ts",
     "build": "tsc",
+    "postbuild": "chmod +x dist/cli.js",
     "prepublishOnly": "npm run typecheck && npm run test && npm run build",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sfrangulov/skill-graveyard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sfrangulov/skill-graveyard/issues"
+  },
+  "homepage": "https://github.com/sfrangulov/skill-graveyard#readme",
   "keywords": [
     "claude-code",
     "claude",
