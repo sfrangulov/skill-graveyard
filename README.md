@@ -1,6 +1,15 @@
 # skill-graveyard
 
-Docs & demo: <https://sfrangulov.github.io/skill-graveyard/>
+[![npm version](https://img.shields.io/npm/v/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard)
+[![npm downloads](https://img.shields.io/npm/dm/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard)
+[![license](https://img.shields.io/npm/l/skill-graveyard.svg)](LICENSE)
+[![node](https://img.shields.io/node/v/skill-graveyard.svg)](package.json)
+
+Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)
+
+<!-- DEMO: replace this block with an asciinema embed once recorded.
+     Example: [![asciicast](https://asciinema.org/a/XXXXX.svg)](https://asciinema.org/a/XXXXX)
+     See _docs/launch/asciinema-script.md for the exact 30-second recording sequence. -->
 
 Audit which Claude Code skills you actually use. Parses your local session logs and sorts every skill name that appears into one of four buckets:
 
@@ -10,6 +19,10 @@ Audit which Claude Code skills you actually use. Parses your local session logs 
 4. **Hallucinated** — invoked and the runtime returned an error. Mostly Claude confusing tool/command names with skill names; surfaced for telemetry but not directly actionable.
 
 Same parser, multiple signals: it's not just a graveyard, it's an audit of where your skill setup is over- and under-provisioned.
+
+## Why this exists
+
+I had 65 skills installed across user, plugin, and agent paths. After parsing 30 days of my own session logs, I found Claude had actually invoked 13 of them. The other 52 were loading their `description` strings into every API request — burning context for skills that never got called. I built this so I could see the gap, and to surface a second signal I didn't expect: Claude regularly invokes built-in tool names (`Bash`, `Read`, `Edit`) as if they were skills, which the runtime then errors on. Same parser, both answers.
 
 ## Install
 
