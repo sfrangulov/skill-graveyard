@@ -71,7 +71,40 @@ Each `known_marketplaces.json` entry points at a `github` repo:
 }
 ```
 
-The marketplace JSON ships at the root of that repo (typically `marketplace.json` or `.marketplace.json`); fetched via raw GitHub URL. Format includes a list of plugins with their current version, which is what we compare against.
+### Marketplace JSON shape (verified 2026-04-29 against `claude-plugins-official` and `thedotmack`)
+
+The marketplace JSON is at `<repo>/HEAD/.claude-plugin/marketplace.json` — **not** at the repo root. Fetched via raw GitHub URL.
+
+The marketplace JSON contains a `plugins` array, but the per-plugin entry shape varies wildly:
+
+**Type A — version on entry (e.g. `thedotmack/claude-mem`):**
+```json
+{ "name": "claude-mem", "version": "11.0.1", "source": "./plugin", ... }
+```
+A direct version string. Easy compare.
+
+**Type B — pinned via `source.sha` (e.g. `42crunch-api-security-testing` in `claude-plugins-official`):**
+```json
+{
+  "name": "42crunch-api-security-testing",
+  "source": { "source": "git-subdir", "url": "...", "path": "...", "ref": "v1.0.1", "sha": "56273e0e..." }
+}
+```
+The marketplace itself records the pinned commit. Compare `source.sha` against installed `gitCommitSha`.
+
+**Type C — `source.url` without sha (e.g. `superpowers`, `figma`):**
+```json
+{ "name": "superpowers", "source": { "source": "url", "url": "https://github.com/obra/superpowers.git" } }
+```
+Marketplace tracks upstream HEAD. Compare via `git ls-remote <url>` against installed `gitCommitSha`.
+
+**Type D — string source pointing into the marketplace repo itself (e.g. `frontend-design`):**
+```json
+{ "name": "frontend-design", "source": "./plugins/frontend-design" }
+```
+The plugin lives as a subdirectory of the marketplace repo. The plugin's "version" effectively is the marketplace repo's git state. Compare with marketplace repo's HEAD. (Often these have `installed.version === "unknown"`, in which case we always classify as `outdated` with reinstall hint regardless of HEAD.)
+
+`claude-plugins-official` has 170 plugins, most are types B/C/D. `thedotmack` has 1 plugin, type A. Real users see ~50–80% type B/C/D.
 
 ## Architecture
 
@@ -80,6 +113,7 @@ Follows the existing convention: subcommands return structured data, `format.ts`
 | File | Role |
 |---|---|
 | `src/outdated.ts` | new. Discovery + version compare + assembling the `OutdatedReport`. |
+| `src/source_resolver.ts` | new. Decides which compare strategy applies per plugin based on its marketplace entry shape (types A/B/C/D). Pure functions, easily testable. |
 | `src/cache.ts` | new. File-based JSON cache with mtime-based TTL. Used only by `outdated`. |
 | `src/fetcher.ts` | new. Thin wrapper over `fetch` and `git ls-remote` so tests can mock at the boundary. |
 | `src/format.ts` | extend. `formatOutdatedReport(report, opts)` and `formatJson` reuse. |
@@ -133,17 +167,37 @@ export interface OutdatedReport {
 2. **Map plugins → marketplace.** Read `known_marketplaces.json`. The plugin id is `<name>@<marketplace>`; resolve `marketplace` to its source repo. If marketplace is missing/unrecognized, the plugin's status becomes `unknown` with reason "no registered marketplace".
 3. **Discover git skills.** Use existing `discovery.ts` to enumerate user (`~/.claude/skills/`) and agent (`~/.agents/skills/`) skills. For each, walk up from the SKILL.md path looking for a `.git` directory. Skills sharing a git root collapse into a single source row.
 4. **Plan fetches.** Build the unique set of:
-   - marketplace source repos (typically 1–3 per machine)
-   - git remotes (one per resolved repo, typically 5–60)
+   - marketplace source repos (typically 1–3 per machine) — fetched from `<repo>/HEAD/.claude-plugin/marketplace.json`
+   - upstream git remotes for type-C plugins (typically 0–10) — discovered after marketplace fetch resolves their `source.url`
+   - git remotes for git-tracked user/agent skills (typically 0–20)
+   - the marketplace repos themselves, when type-D plugins are present (so we can ls-remote the marketplace's HEAD)
 5. **Network phase, with cache.**
-   - For each unique marketplace source: try cache (`~/.cache/skill-graveyard/outdated/marketplace-<slug>.json`). If fresh, use it. Else fetch raw `marketplace.json` from `https://raw.githubusercontent.com/<repo>/HEAD/marketplace.json` (or the marketplace's documented entry path), persist to cache.
-   - For each unique git remote: try cache (`gitremote-<sha256(repo:branch)>.json`). If fresh, use it. Else `git -c credential.helper= ls-remote <remote> <branch>`, parse first column as SHA, persist `{sha, branch, fetchedAt}`.
-   - Fetches run in parallel with a small concurrency cap (e.g. 4) to be polite.
-6. **Compare.**
-   - Plugin: if `installed.version === "unknown"` → `outdated` with reason "installed without version metadata; reinstall to refresh". Otherwise semver compare via `gpt-tokenizer`-style minimal compare (no new dep — write a tiny `compareSemver` helper since we only need three integers).
-   - Git: compare installed SHA (`gitCommitSha` if present, else `git -C <installPath> rev-parse HEAD`) to upstream SHA. If equal → up-to-date. Else compute `git -C <path> rev-list --count <local>..<remote>` for the "N commits behind" line; cap at "many" if expensive.
-7. **Assemble rows.** Group by source. Status assigned per the table in [Error handling](#error-handling). Build `upgradeHint` per kind.
-8. **Return** `OutdatedReport`. Caller (cli.ts) hands to `formatOutdatedReport` or `formatJson`.
+   - For each unique marketplace source: try cache (`~/.cache/skill-graveyard/outdated/marketplace-<slug>.json`). If fresh, use it. Else fetch raw JSON from `https://raw.githubusercontent.com/<repo>/HEAD/.claude-plugin/marketplace.json`, persist to cache.
+   - For each unique git remote (whether discovered from a type-C plugin's `source.url`, a type-D plugin's marketplace repo, or a user/agent skill's git root): try cache (`gitremote-<short-hash>.json`). If fresh, use it. Else `git -c credential.helper= ls-remote <remote> refs/heads/<branch>`, parse first column as SHA, persist `{sha, branch, fetchedAt}`.
+   - Fetches run in parallel with a small concurrency cap (e.g. 4).
+6. **Resolve compare strategy per plugin** (in `source_resolver.ts`). For each installed plugin, look up its entry in the fetched marketplace JSON, then choose a strategy by entry shape:
+
+   | Entry shape | Strategy | "Latest" comes from |
+   |---|---|---|
+   | Has `version` field at the entry root (type A) | **semver** | `entry.version` |
+   | Has object `source` with `sha` field (type B) | **sha-pin** | `entry.source.sha` |
+   | Has object `source` with `url` and no `sha` (type C) | **ls-remote-upstream** | `git ls-remote <entry.source.url> refs/heads/main` (or whatever branch the source object names; default `main`) |
+   | Has string `source` (type D) | **ls-remote-marketplace** | `git ls-remote <marketplace-repo> refs/heads/main` |
+   | Plugin not present in marketplace JSON | `unknown` with reason "plugin not listed in marketplace" | n/a |
+
+7. **Compare.**
+   - **Semver** (type A): if installed.version === "unknown" → `outdated` with reinstall hint. Else `compareSemver(installed.version, entry.version)`.
+   - **Sha-pin** (type B): if installed.gitCommitSha === entry.source.sha → `up-to-date`. Else `outdated`. Display short shas. If installed.gitCommitSha is null → `unknown` with reason "no local commit recorded".
+   - **Ls-remote-upstream** (type C): compare installed.gitCommitSha (or `git -C installPath rev-parse HEAD` if missing) against the fetched ls-remote sha.
+   - **Ls-remote-marketplace** (type D): compare installed.gitCommitSha (if recorded) against the marketplace's HEAD sha. If installed.version === "unknown" → always `outdated` with reinstall hint regardless of sha (matches existing convention from spec). If installed.gitCommitSha is null and version is "unknown" → `outdated` reinstall.
+   - **Git skills** (user/agent): same as before — compare installed SHA against upstream HEAD. If `installed === remote` → up-to-date; else `outdated` with `git pull --ff-only` hint.
+
+8. **Assemble rows.** Group by source. Status assigned per the table in [Error handling](#error-handling). Build `upgradeHint` per kind:
+   - Plugin (any type): `claude plugin update <pluginId>` (verified to exist in current CC).
+   - Plugin with installed.version === "unknown": `claude plugin remove <pluginId>` then `claude plugin install <pluginId>` (reinstall to surface real version).
+   - Git skill: `git -C <rootPath> pull --ff-only`.
+
+9. **Return** `OutdatedReport`. Caller (cli.ts) hands to `formatOutdatedReport` or `formatJson`.
 
 ## CLI surface
 
@@ -219,9 +273,13 @@ Color usage matches existing conventions: `outdated` rows yellow, `errored` red,
 | Case | Behavior | Counter |
 |---|---|---|
 | Marketplace fetch fails (network/404/rate-limit) | All plugins from that marketplace become `errored` with reason = fetch error message. | `errored` |
-| `git ls-remote` fails (network/auth/no-such-remote) | That git source becomes `errored`. | `errored` |
+| `git ls-remote` fails for a type-C plugin's `source.url` | That plugin becomes `errored`. | `errored` |
+| `git ls-remote` fails for a type-D plugin's marketplace repo | All type-D plugins from that marketplace become `errored`. | `errored` |
+| `git ls-remote` fails for a user/agent git source | That git source becomes `errored`. | `errored` |
 | Plugin not in any registered marketplace | `unknown`, reason = "no registered marketplace". | `unknown` |
-| Plugin `version: "unknown"` AND found in marketplace | `outdated`, with explicit "reinstall to refresh metadata" hint. | `outdated` |
+| Plugin not present in the fetched marketplace JSON | `unknown`, reason = "plugin not listed in marketplace". | `unknown` |
+| Plugin `version: "unknown"` AND found in marketplace (type A) | `outdated`, reason "installed without version metadata; reinstall to refresh". | `outdated` |
+| Plugin (type B/C/D) with no local `gitCommitSha` | `unknown`, reason "no local commit recorded; reinstall to refresh". | `unknown` |
 | Skill outside any git tree | `unknown`, reason = "not in a git tree". | `unknown` |
 | Skill in a git tree but no upstream branch (detached HEAD, no tracking branch) | `unknown`, reason = "no upstream branch". | `unknown` |
 | Network entirely unavailable AND no usable cache | Hard fail with stderr message: `outdated requires network access; no usable cache (use --ttl to widen, or check connectivity)`. Exit 1. | n/a |
@@ -281,7 +339,9 @@ Feature add → minor bump → **0.7.0**.
 
 ## Open questions / TBDs
 
-1. **CC plugin update command.** Need to verify whether `claude /plugin update <name>@<marketplace>` actually exists. If it doesn't, the upgrade hint becomes the `remove && install` pair (uglier, but rings true). Resolve at implementation time by inspecting CC's plugin help output or asking a current CC version directly.
-2. **Marketplace JSON entry path.** The default assumed path is `marketplace.json` at repo root, but some marketplaces use `.marketplace.json` or other names. Confirm by inspecting the two marketplaces in use (`anthropics/claude-plugins-official`, `thedotmack/claude-mem`) and document any divergence.
-3. **Concurrency cap.** 4 parallel fetches feels right for ~60 git remotes; revisit if rate limits show up against GitHub during real testing.
-4. **`gitCommitSha` reliability.** Some installed_plugins entries have it, some don't. For those without, falling back to `git -C <installPath> rev-parse HEAD` is fine — but verify the install paths actually contain a `.git` directory in those cases.
+1. ✅ **Resolved 2026-04-29.** `claude plugin update <pluginId>` exists (`claude plugin --help` lists it explicitly). Upgrade hint stays as `claude plugin update <pluginId>`. Note: it's `claude plugin <command>` from the CLI, or `/plugin <command>` from inside CC — the user may run either.
+2. ✅ **Resolved 2026-04-29.** Marketplace JSON path is `<repo>/HEAD/.claude-plugin/marketplace.json` for both `claude-plugins-official` and `thedotmack`. Spec updated.
+3. ✅ **Resolved 2026-04-29.** Marketplace JSON entry shapes are not uniform — see "Marketplace JSON shape" subsection in Background. Compare logic now branches over four shape types (A/B/C/D). New `source_resolver.ts` module captures this.
+4. **Concurrency cap.** 4 parallel fetches feels right for typical user (~3 marketplaces + ~10 type-C upstreams + ~20 user/agent git remotes). Revisit if rate limits show up against GitHub during real testing.
+5. **`gitCommitSha` reliability.** Verified 2026-04-29: only plugins from `source: { source: "url" }` (type C) actually create a `.git` inside their installPath. Type B/D plugins typically have `gitCommitSha: null` in `installed_plugins.json`. For these without a recorded sha, the only signal we can compare against is the marketplace's pinned sha (type B) or the marketplace HEAD (type D) — but we can't verify "what's installed locally" without an authoritative local sha. Fall through to `unknown` with a clear reason rather than guessing.
+6. **`installed.version` "unknown" for type C/D plugins.** Most type-D plugins (`frontend-design`, `context7`) have `installed.version === "unknown"`. Spec keeps existing convention: always classify as `outdated` with reinstall hint, regardless of sha comparison. Reinstalling refreshes the version metadata. This means a freshly-installed type-D plugin still reports as `outdated` — minor false positive, but the reinstall is the right action regardless.

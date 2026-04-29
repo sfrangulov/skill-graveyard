@@ -12,39 +12,22 @@
 
 ---
 
-## Task 1: Verify the two implementation-time TBDs
+## Task 1: ✅ RESOLVED — TBDs from spec investigation
 
-**Files:** none. Output goes to commit message of Task 12 if anything diverges from spec.
+Research completed 2026-04-29. Findings captured in spec; reproduced here for the implementing agent's convenience:
 
-The spec has 4 TBDs. Two of them block correct output and need to be answered before code.
+1. **`claude plugin update <pluginId>` exists.** Verified via `claude plugin --help`. Use this verbatim in upgrade hints.
+2. **Marketplace JSON path:** `<repo>/HEAD/.claude-plugin/marketplace.json` (NOT `marketplace.json` at repo root).
+3. **Marketplace JSON entry shapes are NOT uniform.** Four observed shapes (see spec "Marketplace JSON shape" subsection):
+   - **Type A:** entry has `version` field directly (e.g. `thedotmack/claude-mem`).
+   - **Type B:** entry has `source: { ..., sha: "..." }` — pinned commit (e.g. `42crunch-api-security-testing`).
+   - **Type C:** entry has `source: { source: "url", url }` — no pin, follows upstream HEAD (e.g. `superpowers`, `figma`).
+   - **Type D:** entry has string `source: "./plugins/foo"` — subdir of marketplace repo itself (e.g. `frontend-design`).
+4. **Type-C plugins are the only ones whose `installPath` contains a `.git` directory.** Verified by inspection. Type B/D plugins have no local git repo; their `installed_plugins.json` typically has `gitCommitSha: null`.
 
-- [ ] **Step 1: Verify Claude Code's plugin-update command exists**
+These findings drive the new compare logic in Task 8 and the new `source_resolver.ts` module in Task 6.
 
-Run:
-```sh
-claude --help 2>&1 | grep -i plugin
-# or, inside CC, type: /plugin
-```
-
-If `/plugin update <name>@<marketplace>` exists → keep spec's upgrade hints as-is (`claude /plugin update ...`).
-If it does NOT exist → upgrade hint becomes `claude /plugin remove <id> && claude /plugin install <id>` for ALL outdated plugins (not just unknown-version ones).
-
-Record the answer in a comment at the top of Task 7 (compare/assembly), where `upgradeHint` is built.
-
-- [ ] **Step 2: Verify marketplace JSON entry path**
-
-Run:
-```sh
-ls ~/.claude/plugins/marketplaces/claude-plugins-official/
-ls ~/.claude/plugins/marketplaces/thedotmack/
-```
-
-If the file is named `marketplace.json` at the root → spec is correct.
-If it's `.marketplace.json` or in a subdir → record the actual path and use it in Task 7.
-
-Also `cat` the file to verify the JSON shape contains an array of plugins each with a `version` field. If the shape differs, capture the actual structure.
-
-No commit for this task — it's research that informs subsequent tasks.
+No commit for this task — research only.
 
 ---
 
@@ -432,7 +415,7 @@ git commit -m "discovery: add findGitRoot helper for outdated"
 - Create: `src/outdated.ts`
 - Create: `src/outdated.test.ts`
 
-This task delivers `enumeratePluginSources(claudeDir)` which reads `installed_plugins.json` + `known_marketplaces.json` and returns a list of plugin sources to check.
+This task delivers `enumeratePluginSources(claudeDir)` which reads `installed_plugins.json` + `known_marketplaces.json` and returns a list of plugin sources to check. Each `PluginSource` carries the raw `installed_plugins.json` entry plus the resolved marketplace repo. The marketplace **entry** itself (the per-plugin object inside `marketplace.json`) is NOT loaded here — it's loaded later by the orchestrator after fetching marketplace JSONs.
 
 - [ ] **Step 1: Write failing tests**
 
@@ -647,7 +630,172 @@ git commit -m "outdated: enumerate plugin sources from installed_plugins.json"
 
 ---
 
-## Task 6: Outdated module — git source discovery
+## Task 6: Source resolver — classify marketplace entry shape
+
+**Files:**
+- Create: `src/source_resolver.ts`
+- Create: `src/source_resolver.test.ts`
+
+Pure functions that classify a marketplace entry into one of four shapes (A/B/C/D), and extract the relevant comparison data from each. No I/O — testable in isolation.
+
+- [ ] **Step 1: Write failing tests**
+
+```ts
+// src/source_resolver.test.ts
+import test from "node:test";
+import assert from "node:assert/strict";
+import { classifyMarketplaceEntry } from "./source_resolver.js";
+
+test("classifies type-A entry (version-on-entry)", () => {
+  const r = classifyMarketplaceEntry({ name: "x", version: "1.0.0", source: "./plugin" });
+  assert.equal(r.kind, "version-on-entry");
+  if (r.kind === "version-on-entry") assert.equal(r.version, "1.0.0");
+});
+
+test("classifies type-B entry (sha-pinned source)", () => {
+  const r = classifyMarketplaceEntry({
+    name: "x",
+    source: { source: "git-subdir", url: "https://e/x.git", path: "p", ref: "v1", sha: "abc123" },
+  });
+  assert.equal(r.kind, "sha-pinned");
+  if (r.kind === "sha-pinned") {
+    assert.equal(r.sha, "abc123");
+    assert.equal(r.url, "https://e/x.git");
+  }
+});
+
+test("classifies type-C entry (url source, no sha)", () => {
+  const r = classifyMarketplaceEntry({
+    name: "x",
+    source: { source: "url", url: "https://e/x.git" },
+  });
+  assert.equal(r.kind, "ls-remote-upstream");
+  if (r.kind === "ls-remote-upstream") {
+    assert.equal(r.url, "https://e/x.git");
+    assert.equal(r.branch, "main"); // default
+  }
+});
+
+test("classifies type-D entry (string source pointing into marketplace)", () => {
+  const r = classifyMarketplaceEntry({ name: "x", source: "./plugins/x" });
+  assert.equal(r.kind, "ls-remote-marketplace");
+});
+
+test("classifies entry with explicit ref (branch override) on a url source", () => {
+  const r = classifyMarketplaceEntry({
+    name: "x",
+    source: { source: "url", url: "https://e/x.git", ref: "develop" },
+  });
+  assert.equal(r.kind, "ls-remote-upstream");
+  if (r.kind === "ls-remote-upstream") assert.equal(r.branch, "develop");
+});
+
+test("returns 'unknown-shape' for entries we don't recognize", () => {
+  const r = classifyMarketplaceEntry({ name: "x" } as any);
+  assert.equal(r.kind, "unknown-shape");
+});
+
+test("strips refs/heads/ prefix from a git-subdir ref when present", () => {
+  const r = classifyMarketplaceEntry({
+    name: "x",
+    source: { source: "git-subdir", url: "https://e/x.git", path: "p", ref: "refs/heads/main" },
+  });
+  assert.equal(r.kind, "sha-pinned-or-ref");
+  // when sha is absent but ref is present, fall back to ls-remote on that ref
+  if (r.kind === "sha-pinned-or-ref") {
+    assert.equal(r.branch, "main");
+  }
+});
+```
+
+- [ ] **Step 2: Run, expect failures**
+
+```sh
+npm test -- --test-name-pattern='classifies|unknown-shape|strips refs'
+```
+
+- [ ] **Step 3: Implement `src/source_resolver.ts`**
+
+```ts
+export interface MarketplaceEntry {
+  name: string;
+  version?: string;
+  source?: string | {
+    source: string;        // "url" | "git-subdir" | other
+    url?: string;
+    path?: string;
+    ref?: string;
+    sha?: string;
+  };
+}
+
+export type Strategy =
+  | { kind: "version-on-entry"; version: string }
+  | { kind: "sha-pinned"; url: string; sha: string }
+  | { kind: "sha-pinned-or-ref"; url: string; branch: string }
+  | { kind: "ls-remote-upstream"; url: string; branch: string }
+  | { kind: "ls-remote-marketplace" }
+  | { kind: "unknown-shape" };
+
+export function classifyMarketplaceEntry(entry: MarketplaceEntry): Strategy {
+  // Type A: explicit version on entry
+  if (typeof entry.version === "string" && entry.version.length > 0) {
+    return { kind: "version-on-entry", version: entry.version };
+  }
+
+  const src = entry.source;
+
+  // Type D: string source — points into the marketplace repo itself
+  if (typeof src === "string") {
+    return { kind: "ls-remote-marketplace" };
+  }
+
+  // Type B: object source with explicit sha
+  if (src && typeof src === "object" && typeof src.sha === "string" && src.url) {
+    return { kind: "sha-pinned", url: src.url, sha: src.sha };
+  }
+
+  // Type B-prime: object source with ref but no sha → ls-remote on that ref
+  if (src && typeof src === "object" && typeof src.ref === "string" && src.url) {
+    const branch = src.ref.replace(/^refs\/heads\//, "");
+    return { kind: "sha-pinned-or-ref", url: src.url, branch };
+  }
+
+  // Type C: object source with url only → ls-remote on default branch
+  if (src && typeof src === "object" && typeof src.url === "string") {
+    return { kind: "ls-remote-upstream", url: src.url, branch: "main" };
+  }
+
+  return { kind: "unknown-shape" };
+}
+```
+
+- [ ] **Step 4: Run, expect pass**
+
+```sh
+npm test -- --test-name-pattern='classifies|unknown-shape|strips refs'
+```
+
+Expected: 7 pass.
+
+- [ ] **Step 5: Full suite**
+
+```sh
+npm test
+```
+
+Expected: prior + 7 new pass.
+
+- [ ] **Step 6: Commit**
+
+```sh
+git add src/source_resolver.ts src/source_resolver.test.ts
+git commit -m "outdated: source resolver classifies marketplace entry shapes"
+```
+
+---
+
+## Task 7: Outdated module — git source discovery
 
 **Files:**
 - Modify: `src/outdated.ts` (add `enumerateGitSources`)
@@ -785,13 +933,22 @@ git commit -m "outdated: enumerate git-tracked skill sources"
 
 ---
 
-## Task 7: Outdated module — compare logic + report assembly
+## Task 8: Outdated module — compare logic + report assembly
 
 **Files:**
 - Modify: `src/outdated.ts` (add `compareSemver`, `buildReport`)
 - Modify: `src/outdated.test.ts`
 
-Pure functions: input enumerated sources + fetched data, output `OutdatedReport`. No network here; the orchestration with cache+fetcher comes in Task 8.
+Pure functions: input enumerated sources + fetched data + strategy decisions from `source_resolver`, output `OutdatedReport`. No network here; the orchestration with cache+fetcher comes in Task 9.
+
+The classifier handles **four plugin strategies** plus the git-skill case:
+- `version-on-entry` (type A): semver compare
+- `sha-pinned` (type B): compare entry sha vs installed gitCommitSha
+- `sha-pinned-or-ref` (type B'): compare ls-remote sha for the named branch vs installed gitCommitSha
+- `ls-remote-upstream` (type C): compare ls-remote sha for `main` vs installed gitCommitSha
+- `ls-remote-marketplace` (type D): compare marketplace repo HEAD sha vs installed gitCommitSha (or always-outdated if installed.version is "unknown")
+- `unknown-shape`: classify as `unknown` with reason
+- not in marketplace JSON at all: `unknown` with reason "plugin not listed"
 
 - [ ] **Step 1: Write failing tests for `compareSemver`**
 
@@ -856,13 +1013,15 @@ npm test -- --test-name-pattern='compareSemver|buildReport'
 - [ ] **Step 4: Implement `compareSemver` and `buildReport`**
 
 ```ts
+import { classifyMarketplaceEntry, type MarketplaceEntry, type Strategy } from "./source_resolver.js";
+
 export function compareSemver(a: string, b: string): number {
   const norm = (v: string) => v.replace(/^v/, "").split("-")[0]!;
-  const [aMaj, aMin, aPat] = norm(a).split(".").map((n) => parseInt(n, 10) || 0);
-  const [bMaj, bMin, bPat] = norm(b).split(".").map((n) => parseInt(n, 10) || 0);
-  if (aMaj !== bMaj) return aMaj! - bMaj!;
-  if (aMin !== bMin) return aMin! - bMin!;
-  return aPat! - bPat!;
+  const [aMaj = 0, aMin = 0, aPat = 0] = norm(a).split(".").map((n) => parseInt(n, 10) || 0);
+  const [bMaj = 0, bMin = 0, bPat = 0] = norm(b).split(".").map((n) => parseInt(n, 10) || 0);
+  if (aMaj !== bMaj) return aMaj - bMaj;
+  if (aMin !== bMin) return aMin - bMin;
+  return aPat - bPat;
 }
 
 export type OutdatedStatus = "outdated" | "up-to-date" | "unknown" | "errored";
@@ -886,24 +1045,33 @@ export interface OutdatedReport {
   counters: { outdated: number; upToDate: number; unknown: number; errored: number };
 }
 
+interface MarketplaceFetchResult {
+  /** Parsed marketplace JSON. */
+  data?: { plugins: MarketplaceEntry[] };
+  /** Repo HEAD SHA, captured during fetch via ls-remote on the marketplace repo. Used by type-D plugins. */
+  marketplaceHeadSha?: string;
+  /** Error message if fetch failed. */
+  error?: string;
+}
+
 interface BuildReportInput {
   plugins: PluginSource[];
   gits: GitSource[];
-  /** key: marketplaceRepo. value: parsed marketplace.json (we expect { plugins: [{name, version}] }). */
-  marketplaceData: Map<string, { plugins: Array<{ name: string; version: string }> } | { error: string }>;
-  /** key: `${remoteUrl}@${branch}`. value: SHA or { error }. */
+  /** key: marketplaceRepo (e.g. "anthropics/claude-plugins-official"). */
+  marketplaces: Map<string, MarketplaceFetchResult>;
+  /**
+   * key: `${remoteUrl}@${branch}`. value: SHA or { error }.
+   * Populated by orchestrator with shas needed for type-C plugins (after resolver decides what to fetch)
+   * AND for git-tracked user/agent skills.
+   */
   gitRemoteShas: Map<string, string | { error: string }>;
   cacheHits?: number;
 }
 
 export function buildReport(input: BuildReportInput): OutdatedReport {
   const rows: OutdatedRow[] = [];
-  for (const p of input.plugins) {
-    rows.push(classifyPlugin(p, input.marketplaceData));
-  }
-  for (const g of input.gits) {
-    rows.push(classifyGit(g, input.gitRemoteShas));
-  }
+  for (const p of input.plugins) rows.push(classifyPlugin(p, input.marketplaces, input.gitRemoteShas));
+  for (const g of input.gits) rows.push(classifyGit(g, input.gitRemoteShas));
   const counters = { outdated: 0, upToDate: 0, unknown: 0, errored: 0 };
   for (const r of rows) {
     if (r.status === "outdated") counters.outdated++;
@@ -919,86 +1087,160 @@ export function buildReport(input: BuildReportInput): OutdatedReport {
   };
 }
 
-function classifyPlugin(p: PluginSource, data: BuildReportInput["marketplaceData"]): OutdatedRow {
-  const baseRow = {
+const UPDATE_HINT = (id: string) => [`claude plugin update ${id}`];
+const REINSTALL_HINT = (id: string) => [`claude plugin remove ${id}`, `claude plugin install ${id}`];
+
+function classifyPlugin(
+  p: PluginSource,
+  marketplaces: Map<string, MarketplaceFetchResult>,
+  shas: Map<string, string | { error: string }>,
+): OutdatedRow {
+  const base = {
     kind: "plugin" as const,
     name: p.pluginId,
     source: `plugin:${p.pluginName}`,
-    affectedSkills: [], // filled by orchestrator (Task 8) since the plugin's installPath knows them
+    affectedSkills: [], // populated by orchestrator
     installedVersion: p.installedVersion,
   };
   if (!p.marketplaceRepo) {
-    return { ...baseRow, status: "unknown", latestVersion: "?",
-      reason: "no registered marketplace" };
+    return { ...base, status: "unknown", latestVersion: "?", reason: "no registered marketplace" };
   }
-  const md = data.get(p.marketplaceRepo);
-  if (!md) {
-    return { ...baseRow, status: "errored", latestVersion: "?",
-      reason: "marketplace not fetched" };
+  const market = marketplaces.get(p.marketplaceRepo);
+  if (!market) {
+    return { ...base, status: "errored", latestVersion: "?", reason: "marketplace not fetched" };
   }
-  if ("error" in md) {
-    return { ...baseRow, status: "errored", latestVersion: "?", reason: md.error };
+  if (market.error || !market.data) {
+    return { ...base, status: "errored", latestVersion: "?", reason: market.error ?? "marketplace not fetched" };
   }
-  const entry = md.plugins.find((x) => x.name === p.pluginName);
+  const entry = market.data.plugins.find((x) => x.name === p.pluginName);
   if (!entry) {
-    return { ...baseRow, status: "unknown", latestVersion: "?",
-      reason: "plugin not listed in marketplace" };
+    return { ...base, status: "unknown", latestVersion: "?", reason: "plugin not listed in marketplace" };
   }
-  const latest = entry.version;
-  if (p.installedVersion === "unknown") {
-    return {
-      ...baseRow, status: "outdated", latestVersion: latest,
-      reason: "installed without version metadata; reinstall to refresh",
-      upgradeHint: [
-        `claude /plugin remove ${p.pluginId}`,
-        `claude /plugin install ${p.pluginId}`,
-      ],
-    };
+
+  const strat = classifyMarketplaceEntry(entry);
+
+  switch (strat.kind) {
+    case "version-on-entry": {
+      const latest = strat.version;
+      if (p.installedVersion === "unknown") {
+        return {
+          ...base, status: "outdated", latestVersion: latest,
+          reason: "installed without version metadata; reinstall to refresh",
+          upgradeHint: REINSTALL_HINT(p.pluginId),
+        };
+      }
+      if (compareSemver(p.installedVersion, latest) >= 0) {
+        return { ...base, status: "up-to-date", latestVersion: latest };
+      }
+      return { ...base, status: "outdated", latestVersion: latest, upgradeHint: UPDATE_HINT(p.pluginId) };
+    }
+
+    case "sha-pinned": {
+      if (!p.gitCommitSha) {
+        return { ...base, status: "unknown", latestVersion: short(strat.sha),
+          reason: "no local commit recorded; reinstall to refresh",
+          upgradeHint: REINSTALL_HINT(p.pluginId) };
+      }
+      if (p.gitCommitSha === strat.sha) {
+        return { ...base, status: "up-to-date",
+          installedVersion: short(p.gitCommitSha), latestVersion: short(strat.sha) };
+      }
+      return { ...base, status: "outdated",
+        installedVersion: short(p.gitCommitSha), latestVersion: short(strat.sha),
+        upgradeHint: UPDATE_HINT(p.pluginId) };
+    }
+
+    case "sha-pinned-or-ref":
+    case "ls-remote-upstream": {
+      const key = `${strat.url}@${strat.branch}`;
+      return classifyByLsRemote(p, base, key, shas);
+    }
+
+    case "ls-remote-marketplace": {
+      // Type D: compare with marketplace repo's HEAD sha
+      if (p.installedVersion === "unknown") {
+        // Always outdated — installed without version, reinstall to refresh
+        return {
+          ...base, status: "outdated", latestVersion: short(market.marketplaceHeadSha ?? "?"),
+          reason: "installed without version metadata (marketplace-internal plugin); reinstall to refresh",
+          upgradeHint: REINSTALL_HINT(p.pluginId),
+        };
+      }
+      if (!p.gitCommitSha) {
+        return { ...base, status: "unknown", latestVersion: short(market.marketplaceHeadSha ?? "?"),
+          reason: "no local commit recorded for marketplace-internal plugin",
+          upgradeHint: REINSTALL_HINT(p.pluginId) };
+      }
+      if (!market.marketplaceHeadSha) {
+        return { ...base, status: "errored", latestVersion: "?", reason: "marketplace HEAD not fetched" };
+      }
+      if (p.gitCommitSha === market.marketplaceHeadSha) {
+        return { ...base, status: "up-to-date",
+          installedVersion: short(p.gitCommitSha), latestVersion: short(market.marketplaceHeadSha) };
+      }
+      return { ...base, status: "outdated",
+        installedVersion: short(p.gitCommitSha), latestVersion: short(market.marketplaceHeadSha),
+        upgradeHint: UPDATE_HINT(p.pluginId) };
+    }
+
+    case "unknown-shape":
+      return { ...base, status: "unknown", latestVersion: "?",
+        reason: "marketplace entry shape not recognized" };
   }
-  const cmp = compareSemver(p.installedVersion, latest);
-  if (cmp >= 0) {
-    return { ...baseRow, status: "up-to-date", latestVersion: latest };
-  }
-  return {
-    ...baseRow, status: "outdated", latestVersion: latest,
-    upgradeHint: [`claude /plugin update ${p.pluginId}`],
-  };
 }
 
-function classifyGit(g: GitSource, shas: BuildReportInput["gitRemoteShas"]): OutdatedRow {
-  const base = {
-    kind: "git" as const,
-    name: g.displayName,
-    affectedSkills: g.affectedSkills,
-    installedVersion: g.installedSha.slice(0, 7),
-  };
-  if (!g.remoteUrl) {
-    return { ...base, status: "unknown", latestVersion: "?", reason: "no origin remote" };
-  }
-  if (!g.branch) {
-    return { ...base, status: "unknown", latestVersion: "?", reason: "detached HEAD" };
-  }
-  const key = `${g.remoteUrl}@${g.branch}`;
+function classifyByLsRemote(
+  p: PluginSource,
+  base: Omit<OutdatedRow, "status" | "latestVersion">,
+  key: string,
+  shas: Map<string, string | { error: string }>,
+): OutdatedRow {
   const got = shas.get(key);
-  if (!got) {
-    return { ...base, status: "errored", latestVersion: "?",
-      reason: "remote sha not fetched" };
+  if (got === undefined) {
+    return { ...base, status: "errored", latestVersion: "?", reason: "remote sha not fetched" };
   }
   if (typeof got === "object") {
     return { ...base, status: "errored", latestVersion: "?", reason: got.error };
   }
   const remoteSha = got;
-  if (g.installedSha === remoteSha) {
-    return { ...base, status: "up-to-date", latestVersion: remoteSha.slice(0, 7) };
+  if (!p.gitCommitSha) {
+    return { ...base, status: "unknown", latestVersion: short(remoteSha),
+      reason: "no local commit recorded; reinstall to refresh",
+      upgradeHint: REINSTALL_HINT(p.pluginId) };
   }
-  return {
-    ...base, status: "outdated", latestVersion: remoteSha.slice(0, 7),
-    upgradeHint: [`git -C ${g.rootPath} pull --ff-only`],
-  };
+  if (p.gitCommitSha === remoteSha) {
+    return { ...base, status: "up-to-date",
+      installedVersion: short(p.gitCommitSha), latestVersion: short(remoteSha) };
+  }
+  return { ...base, status: "outdated",
+    installedVersion: short(p.gitCommitSha), latestVersion: short(remoteSha),
+    upgradeHint: UPDATE_HINT(p.pluginId) };
 }
+
+function classifyGit(g: GitSource, shas: Map<string, string | { error: string }>): OutdatedRow {
+  const base = {
+    kind: "git" as const,
+    name: g.displayName,
+    affectedSkills: g.affectedSkills,
+    installedVersion: short(g.installedSha),
+  };
+  if (!g.remoteUrl) return { ...base, status: "unknown", latestVersion: "?", reason: "no origin remote" };
+  if (!g.branch) return { ...base, status: "unknown", latestVersion: "?", reason: "detached HEAD" };
+  const key = `${g.remoteUrl}@${g.branch}`;
+  const got = shas.get(key);
+  if (got === undefined) return { ...base, status: "errored", latestVersion: "?", reason: "remote sha not fetched" };
+  if (typeof got === "object") return { ...base, status: "errored", latestVersion: "?", reason: got.error };
+  if (g.installedSha === got) return { ...base, status: "up-to-date", latestVersion: short(got) };
+  return { ...base, status: "outdated", latestVersion: short(got),
+    upgradeHint: [`git -C ${g.rootPath} pull --ff-only`] };
+}
+
+function short(sha: string): string { return sha.slice(0, 7); }
 ```
 
-> **TBD-resolution from Task 1:** if `claude /plugin update` doesn't exist, replace its single-line hint above with the same `remove + install` pair used for the unknown-version case.
+Note the subtle behaviors:
+- For type-C plugins, the orchestrator (Task 9) uses `classifyMarketplaceEntry` to discover which (url, branch) pairs need ls-remote, fetches them, and stuffs the results into `gitRemoteShas` keyed `${url}@${branch}`. By the time `buildReport` runs, all needed shas are already in the map.
+- For type-D plugins, `marketplaces.get(repo).marketplaceHeadSha` must be populated by the orchestrator from a separate ls-remote on the marketplace repo itself.
 
 - [ ] **Step 5: Run, expect pass**
 
@@ -1025,13 +1267,19 @@ git commit -m "outdated: compareSemver + buildReport classifier"
 
 ---
 
-## Task 8: Outdated module — orchestration with cache + fetcher
+## Task 9: Outdated module — orchestration with cache + fetcher
 
 **Files:**
 - Modify: `src/outdated.ts` (add `runOutdated`)
 - Modify: `src/outdated.test.ts`
 
-Top-level entry: discover sources, fetch (cached), build report, return.
+Top-level entry. Two-phase fetch:
+
+**Phase 1** — fetch all marketplace JSONs in parallel (with cache). For each marketplace, also `git ls-remote` the marketplace repo itself to capture `marketplaceHeadSha` (needed for type-D plugins).
+
+**Phase 2** — for each plugin, run `classifyMarketplaceEntry` against its marketplace entry. Collect the unique `(url, branch)` pairs needed by type-C / sha-pinned-or-ref strategies. Add the unique `(url, branch)` pairs from git-tracked user/agent skills. Fetch all those ls-remote results in parallel (with cache).
+
+**Phase 3** — call `buildReport` with everything assembled.
 
 - [ ] **Step 1: Write failing tests using a mock fetcher**
 
@@ -1161,7 +1409,7 @@ git commit -m "outdated: orchestrate with cache + fetcher"
 
 ---
 
-## Task 9: Format the report for terminal
+## Task 10: Format the report for terminal
 
 **Files:**
 - Modify: `src/format.ts` (add `formatOutdatedReport`)
@@ -1208,7 +1456,7 @@ git commit -m "format: outdated report formatter"
 
 ---
 
-## Task 10: CLI integration
+## Task 11: CLI integration
 
 **Files:**
 - Modify: `src/cli.ts`
@@ -1308,7 +1556,7 @@ git commit -m "cli: route outdated subcommand + flags"
 
 ---
 
-## Task 11: Documentation updates
+## Task 12: Documentation updates
 
 **Files:**
 - Modify: `README.md`
@@ -1354,7 +1602,7 @@ git commit -m "docs: document outdated subcommand and revised network posture"
 
 ---
 
-## Task 12: CHANGELOG, version bump, build, smoke, push
+## Task 13: CHANGELOG, version bump, build, smoke, push
 
 **Files:**
 - Modify: `CHANGELOG.md`
@@ -1443,37 +1691,40 @@ gh release create v0.7.0 --notes-file <release-notes>
 
 | Spec section | Task that covers it |
 |---|---|
-| Goal: report plugin updates | Tasks 5, 7, 9 |
-| Goal: report git-tracked skill updates | Tasks 4, 6, 7, 9 |
-| Goal: group by source | Task 7 (buildReport), Task 9 (formatter) |
-| Goal: TTL cache | Tasks 2, 8 |
-| Goal: local-only contract preserved | Task 11 (docs explicitly call out exception) |
+| Goal: report plugin updates | Tasks 5, 6, 8, 9 |
+| Goal: report git-tracked skill updates | Tasks 4, 7, 8, 9 |
+| Goal: group by source | Task 8 (buildReport), Task 10 (formatter) |
+| Goal: TTL cache | Tasks 2, 9 |
+| Goal: local-only contract preserved | Task 12 (docs explicitly call out exception) |
+| Marketplace JSON shape variations (4 types) | Task 6 (resolver), Task 8 (compare branches) |
 | Architecture: cache.ts | Task 2 |
 | Architecture: fetcher.ts | Task 3 |
-| Architecture: outdated.ts | Tasks 5–8 |
+| Architecture: source_resolver.ts | Task 6 |
+| Architecture: outdated.ts | Tasks 5, 7, 8, 9 |
 | Architecture: discovery.ts findGitRoot | Task 4 |
-| Architecture: format.ts extension | Task 9 |
-| Architecture: cli.ts routing | Task 10 |
-| Data model | Tasks 5, 7 |
-| Data flow | Tasks 5–8 |
-| CLI surface (--no-cache, --ttl, --json) | Task 10 |
-| Output format | Task 9 |
-| Cache TTL default 60min | Tasks 2, 8 |
-| Error handling matrix (all 11 cases) | Tasks 7, 8 |
-| Testing strategy | Tasks 2, 3, 4, 5, 6, 7, 8, 9 |
-| Documentation impact | Task 11 |
-| Versioning 0.7.0 | Task 12 |
+| Architecture: format.ts extension | Task 10 |
+| Architecture: cli.ts routing | Task 11 |
+| Data model | Tasks 5, 8 |
+| Data flow | Tasks 5–9 |
+| CLI surface (--no-cache, --ttl, --json) | Task 11 |
+| Output format | Task 10 |
+| Cache TTL default 60min | Tasks 2, 9 |
+| Error handling matrix (all 14 cases) | Tasks 8, 9 |
+| Testing strategy | Tasks 2, 3, 4, 5, 6, 7, 8, 9, 10 |
+| Documentation impact | Task 12 |
+| Versioning 0.7.0 | Task 13 |
 
 No spec section is uncovered.
 
-**Placeholder scan:** Three `// ...` ellipsis exist in test bodies for Tasks 6, 7, 8 — these are explicitly noted as "expand following the pattern of Task 5". The pattern-source IS in the plan. This is acceptable. Two outright TBDs surface deliberately at Task 1; these resolve before code lands.
+**Placeholder scan:** A few `// ...` ellipses exist in test bodies for Tasks 7, 8, 9 — explicitly noted as "expand following the pattern of Task 5". The pattern-source IS in the plan. Acceptable. The four spec-level TBDs (CC update command, marketplace JSON path, marketplace shape variations, gitCommitSha reliability) are all resolved at Task 1 with concrete findings — no open TBDs remain.
 
 **Type consistency check:**
-- `OutdatedRow.kind`: declared as `"plugin" | "git"` in Task 7, used in Task 9 — consistent.
-- `OutdatedStatus`: declared in Task 7, used unchanged thereafter.
-- `PluginSource`/`GitSource`: defined in Tasks 5/6, reused in 7/8.
-- `Fetcher` interface: defined in Task 3, used in Task 8 — methods `fetchMarketplace` and `gitLsRemote` match.
-- `Cache` API: defined in Task 2 (`get`, `set`, `invalidate`), used in Task 8 — match.
+- `OutdatedRow.kind`: declared as `"plugin" | "git"` in Task 8, used in Task 10 — consistent.
+- `OutdatedStatus`: declared in Task 8, used unchanged thereafter.
+- `PluginSource` / `GitSource`: defined in Tasks 5 / 7, reused in 8 / 9.
+- `MarketplaceEntry` / `Strategy`: defined in Task 6, reused in Task 8.
+- `Fetcher` interface: defined in Task 3, used in Task 9.
+- `Cache` API: defined in Task 2 (`get`, `set`, `invalidate`), used in Task 9.
 
 No type drift.
 
