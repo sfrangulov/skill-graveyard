@@ -2,6 +2,16 @@
 
 All notable changes to skill-graveyard. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.6.1 — 2026-04-29
+
+### Added
+
+- **Honor `NO_COLOR` env var.** The CLI now respects [no-color.org](https://no-color.org/): any non-empty `NO_COLOR` disables ANSI output even on a TTY. Empty `NO_COLOR=""` is per-spec ignored. Explicit `--color` continues to override. Thanks [@tmchow](https://github.com/tmchow) ([#2](https://github.com/sfrangulov/skill-graveyard/pull/2)).
+
+### Fixed
+
+- **Entry-point guard in `cli.ts`.** Importing from `cli.ts` (e.g. from a test) no longer triggers a full CLI run as a side effect. Latent bug since the CLI was first written; surfaced when the new `cli.test.ts` started importing `parseArgs` and Node 20's test-runner IPC choked on the resulting stdout interleave. Side benefit: test suite is ~12× faster (4.8s → 0.4s).
+
 ## 0.6.0 — 2026-04-29
 
 First public release. Distributed via npm and as a Claude Code plugin.
