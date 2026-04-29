@@ -152,3 +152,29 @@ test("CLI runs when invoked through a symlink (e.g. npx bin shim)", async () => 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("parseArgs recognizes 'outdated' as a command", () => {
+  const args = parseArgs(["outdated"]);
+  assert.equal(args.command, "outdated");
+});
+
+test("parseArgs --no-cache sets noCache true", () => {
+  const args = parseArgs(["outdated", "--no-cache"]);
+  assert.equal(args.noCache, true);
+});
+
+test("parseArgs --ttl parses minutes as a non-negative number", () => {
+  const args = parseArgs(["outdated", "--ttl", "5"]);
+  assert.equal(args.ttlMinutes, 5);
+});
+
+test("parseArgs --ttl 0 is allowed (effectively forces refetch)", () => {
+  const args = parseArgs(["outdated", "--ttl", "0"]);
+  assert.equal(args.ttlMinutes, 0);
+});
+
+test("parseArgs defaults: noCache=false, ttlMinutes=null", () => {
+  const args = parseArgs([]);
+  assert.equal(args.noCache, false);
+  assert.equal(args.ttlMinutes, null);
+});

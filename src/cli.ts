@@ -6,11 +6,14 @@ import { runCost } from "./cost.js";
 import {
   formatCostReport,
   formatJson,
+  formatOutdatedReport,
   formatProjectsReport,
   formatPruneReport,
   formatReport,
   formatSuggestReport,
 } from "./format.js";
+import { runOutdated } from "./outdated.js";
+import { resolveClaudePaths } from "./paths.js";
 import { runPrune, type PruneSourceFilter } from "./prune.js";
 import { runProjects } from "./projects.js";
 import { runSuggest } from "./suggest.js";
@@ -25,11 +28,12 @@ const PKG_VERSION: string = (
 
 type Command =
   | "audit"
+  | "cost"
+  | "help"
+  | "outdated"
+  | "projects"
   | "prune"
   | "suggest"
-  | "cost"
-  | "projects"
-  | "help"
   | "version";
 
 interface ParsedArgs {
@@ -41,6 +45,8 @@ interface ParsedArgs {
   auditFilter?: Category;
   pruneApply: boolean;
   pruneOnly?: PruneSourceFilter;
+  noCache: boolean;
+  ttlMinutes: number | null;
 }
 
 const HELP = `skill-graveyard — audit Claude Code skills you actually use
@@ -51,6 +57,7 @@ USAGE
   skill-graveyard suggest [options]
   skill-graveyard projects [options]
   skill-graveyard cost [options]
+  skill-graveyard outdated [options]
   skill-graveyard --help | --version
 
 COMMANDS
@@ -59,6 +66,7 @@ COMMANDS
   suggest    classify hallucinated/missing into actionable buckets
   projects   show skill usage broken down per project (cwd from sessions)
   cost       estimate token cost of installed skill metadata vs invocations
+  outdated   check installed plugins / git-tracked skills for upstream updates (network)
 
 COMMON OPTIONS
   --days <n>            window in days (default: 30)
@@ -73,6 +81,10 @@ PRUNE OPTIONS
   --apply               execute unlinks for user/agents skills (plugin removals always print only)
   --only <kind>         filter to one of: user | agents | plugin
 
+OUTDATED OPTIONS
+  --no-cache            force re-fetch (ignores cached marketplace + git-ls-remote)
+  --ttl <minutes>       cache TTL override (default: 60)
+
 EXAMPLES
   skill-graveyard
   skill-graveyard --days 14
@@ -80,6 +92,8 @@ EXAMPLES
   skill-graveyard prune --apply
   skill-graveyard suggest
   skill-graveyard --json | jq '.rows[] | select(.category=="dead") | .invokeName'
+  skill-graveyard outdated
+  skill-graveyard outdated --no-cache
 `;
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -93,6 +107,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
     json: false,
     color: process.stdout.isTTY === true && !noColorEnv,
     pruneApply: false,
+    noCache: false,
+    ttlMinutes: null,
   };
 
   let i = 0;
@@ -104,6 +120,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       cmd === "suggest" ||
       cmd === "cost" ||
       cmd === "projects" ||
+      cmd === "outdated" ||
       cmd === "help"
     ) {
       args.command = cmd;
@@ -148,6 +165,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
       case "--apply":
         args.pruneApply = true;
         break;
+      case "--no-cache":
+        args.noCache = true;
+        break;
+      case "--ttl": {
+        const v = argv[++i];
+        const n = Number(v);
+        if (!Number.isFinite(n) || n < 0) fatal(`--ttl requires a non-negative number, got: ${v}`);
+        args.ttlMinutes = n;
+        break;
+      }
       case "--only": {
         const v = argv[++i];
         if (!v) fatal("--only requires a value");
@@ -245,6 +272,20 @@ async function main() {
       process.stdout.write(formatJson(report) + "\n");
     } else {
       process.stdout.write(formatProjectsReport(report, { color: args.color }) + "\n");
+    }
+    return;
+  }
+
+  if (args.command === "outdated") {
+    const report = await runOutdated({
+      claudeDir: resolveClaudePaths(args.claudeDir).claudeDir,
+      ttlMinutes: args.ttlMinutes ?? undefined,
+      noCache: args.noCache,
+    });
+    if (args.json) {
+      process.stdout.write(formatJson(report) + "\n");
+    } else {
+      process.stdout.write(formatOutdatedReport(report, { color: args.color }) + "\n");
     }
     return;
   }
