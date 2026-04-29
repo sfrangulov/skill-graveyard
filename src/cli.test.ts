@@ -1,6 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "./cli.js";
+
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const PKG_VERSION = (
+  JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as {
+    version: string;
+  }
+).version;
 
 function withEnv<T>(env: Record<string, string | undefined>, fn: () => T): T {
   const original: Record<string, string | undefined> = {};
@@ -103,4 +113,17 @@ test("Non-TTY stdout keeps color disabled even without NO_COLOR", () => {
       assert.equal(args.color, false);
     });
   });
+});
+
+test("--version reports the version from package.json", () => {
+  // Regression for the 0.6.1 mishap where the version string was hardcoded
+  // and quietly drifted from the published package.json. Spawn the actual
+  // CLI binary so we exercise the same code path users hit.
+  const result = spawnSync(
+    process.execPath,
+    ["--import", "tsx", "src/cli.ts", "--version"],
+    { encoding: "utf-8", cwd: REPO_ROOT },
+  );
+  assert.equal(result.status, 0, `cli exited non-zero: ${result.stderr}`);
+  assert.equal(result.stdout.trim(), `skill-graveyard ${PKG_VERSION}`);
 });

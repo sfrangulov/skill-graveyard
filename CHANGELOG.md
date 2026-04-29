@@ -2,6 +2,12 @@
 
 All notable changes to skill-graveyard. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.6.2 — 2026-04-29
+
+### Fixed
+
+- **`--version` now reads from `package.json` at runtime** instead of a hardcoded string. The previous string was missed during the 0.6.1 bump, so `skill-graveyard@0.6.1 --version` printed `skill-graveyard 0.6.0`. Added a regression test that spawns the CLI and asserts the printed version matches `package.json`.
+
 ## 0.6.1 — 2026-04-29
 
 ### Added

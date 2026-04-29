@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAudit, type Category } from "./audit.js";
 import { runCost } from "./cost.js";
@@ -13,6 +14,14 @@ import {
 import { runPrune, type PruneSourceFilter } from "./prune.js";
 import { runProjects } from "./projects.js";
 import { runSuggest } from "./suggest.js";
+
+// Read version at runtime so --version stays in sync with package.json.
+// Hardcoding it bit us between 0.6.0 and 0.6.1.
+const PKG_VERSION: string = (
+  JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf-8"),
+  ) as { version: string }
+).version;
 
 type Command =
   | "audit"
@@ -177,7 +186,7 @@ async function main() {
     return;
   }
   if (args.command === "version") {
-    process.stdout.write("skill-graveyard 0.6.0\n");
+    process.stdout.write(`skill-graveyard ${PKG_VERSION}\n`);
     return;
   }
 

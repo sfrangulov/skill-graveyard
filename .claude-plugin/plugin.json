@@ -1,6 +1,6 @@
 {
   "name": "skill-graveyard",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
   "homepage": "https://sfrangulov.github.io/skill-graveyard/",
   "license": "MIT",
