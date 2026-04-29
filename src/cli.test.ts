@@ -127,3 +127,28 @@ test("--version reports the version from package.json", () => {
   assert.equal(result.status, 0, `cli exited non-zero: ${result.stderr}`);
   assert.equal(result.stdout.trim(), `skill-graveyard ${PKG_VERSION}`);
 });
+
+test("CLI runs when invoked through a symlink (e.g. npx bin shim)", async () => {
+  // Regression for the 0.6.2 mishap where the entry-point guard compared
+  // process.argv[1] (the symlink path) to fileURLToPath(import.meta.url)
+  // (the real path), so npx invocations got 0 bytes of output. Reproduce by
+  // creating a symlink to src/cli.ts and invoking node through it.
+  const { mkdtemp, symlink, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const dir = await mkdtemp(join(tmpdir(), "skg-symlink-"));
+  try {
+    const linkPath = join(dir, "skill-graveyard-shim.ts");
+    await symlink(join(REPO_ROOT, "src", "cli.ts"), linkPath);
+    const result = spawnSync(
+      process.execPath,
+      ["--import", "tsx", linkPath, "--version"],
+      { encoding: "utf-8", cwd: REPO_ROOT },
+    );
+    assert.equal(result.status, 0, `cli exited non-zero: ${result.stderr}`);
+    assert.equal(result.stdout.trim(), `skill-graveyard ${PKG_VERSION}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

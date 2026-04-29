@@ -2,6 +2,12 @@
 
 All notable changes to skill-graveyard. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.6.3 — 2026-04-29
+
+### Fixed
+
+- **Critical: bare `skill-graveyard` invocation produced zero output via `npx` or globally-installed bin.** The entry-point guard introduced in 0.6.2 compared `process.argv[1]` against `fileURLToPath(import.meta.url)` directly, but those paths differ whenever a symlink sits between them — and the npm-managed bin shim is **always** a symlink to `dist/cli.js`. So 0.6.2's guard rejected every real-world install path. Fixed by canonicalizing both sides via `realpathSync` before comparing. Added a regression test that creates a symlink and invokes the CLI through it. Use 0.6.3 — 0.6.2 has been deprecated on npm.
+
 ## 0.6.2 — 2026-04-29
 
 ### Fixed

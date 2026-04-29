@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAudit, type Category } from "./audit.js";
 import { runCost } from "./cost.js";
@@ -250,10 +250,25 @@ async function main() {
   }
 }
 
-// Only run when invoked as the entry point. Without this guard, `import`-ing
-// anything from this file (e.g. from a test) executes the entire CLI, which
-// corrupts Node's test-runner IPC on Node 20 ("Unable to deserialize cloned data").
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// Only run when invoked as the entry point. The naive comparison
+// `process.argv[1] === fileURLToPath(import.meta.url)` is wrong whenever any
+// symlink sits between the user-facing path and the real file: the npx/global
+// bin shim is always a symlink to dist/cli.js, and macOS /tmp resolves through
+// /private/tmp. realpathSync canonicalizes both sides so they actually match.
+// 0.6.2 shipped the naive form and produced 0 bytes of output via npx — that's
+// what this is fixing.
+function isEntryPoint(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return (
+      realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   main().catch((err: unknown) => {
     process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
     process.exit(1);
