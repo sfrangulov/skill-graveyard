@@ -72,12 +72,16 @@ EXAMPLES
   skill-graveyard --json | jq '.rows[] | select(.category=="dead") | .invokeName'
 `;
 
-function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(argv: string[]): ParsedArgs {
+  // https://no-color.org/ — any non-empty NO_COLOR env var disables ANSI output.
+  // Explicit --color still overrides further down in the parser.
+  const noColorEnv = (process.env.NO_COLOR ?? "") !== "";
+
   const args: ParsedArgs = {
     command: "audit",
     days: 30,
     json: false,
-    color: process.stdout.isTTY === true,
+    color: process.stdout.isTTY === true && !noColorEnv,
     pruneApply: false,
   };
 
