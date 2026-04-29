@@ -7,9 +7,7 @@
 
 Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)
 
-<!-- DEMO: replace this block with an asciinema embed once recorded.
-     Example: [![asciicast](https://asciinema.org/a/XXXXX.svg)](https://asciinema.org/a/XXXXX)
-     See _docs/launch/asciinema-script.md for the exact 30-second recording sequence. -->
+[![asciicast](https://asciinema.org/a/JFgkjIF1emExXjQe.svg)](https://asciinema.org/a/JFgkjIF1emExXjQe)
 
 Audit which Claude Code skills you actually use. Parses your local session logs and sorts every skill name that appears into one of four buckets:
 
@@ -22,7 +20,7 @@ Same parser, multiple signals: it's not just a graveyard, it's an audit of where
 
 ## Why this exists
 
-I had 65 skills installed across user, plugin, and agent paths. After parsing 30 days of my own session logs, I found Claude had actually invoked 13 of them. The other 52 were loading their `description` strings into every API request — burning context for skills that never got called. I built this so I could see the gap, and to surface a second signal I didn't expect: Claude regularly invokes built-in tool names (`Bash`, `Read`, `Edit`) as if they were skills, which the runtime then errors on. Same parser, both answers.
+I had 65 skills installed across user, plugin, and agent paths. After parsing 30 days of my own session logs, I found Claude had actually invoked 14 of them. The other 51 were still loading their `description` strings into every API request — about 500K skill-metadata tokens over the window covering skills that were never called once. I built this so I could see the gap, and to surface a second signal I didn't expect: Claude regularly invokes built-in tool names (`Bash`, `Read`, `Edit`) as if they were skills, which the runtime then errors on. Same parser, both answers.
 
 ## Install
 
