@@ -1,0 +1,38 @@
+{
+  "name": "skill-graveyard",
+  "version": "0.1.0",
+  "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
+  "type": "module",
+  "bin": {
+    "skill-graveyard": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "skills",
+    "audit",
+    "cli",
+    "anthropic"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.12.2",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
