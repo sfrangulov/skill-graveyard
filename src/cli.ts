@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { runAudit, type Category } from "./audit.js";
+import { runCost } from "./cost.js";
 import {
+  formatCostReport,
   formatJson,
   formatPruneReport,
   formatReport,
@@ -9,7 +11,7 @@ import {
 import { runPrune, type PruneSourceFilter } from "./prune.js";
 import { runSuggest } from "./suggest.js";
 
-type Command = "audit" | "prune" | "suggest" | "help" | "version";
+type Command = "audit" | "prune" | "suggest" | "cost" | "help" | "version";
 
 interface ParsedArgs {
   command: Command;
@@ -34,6 +36,7 @@ COMMANDS
   audit      (default) classify every skill into active | dead | missing | hallucinated
   prune      generate (and optionally execute) removal commands for dead skills
   suggest    classify hallucinated/missing into actionable buckets
+  cost       estimate token cost of installed skill metadata vs invocations
 
 COMMON OPTIONS
   --days <n>            window in days (default: 30)
@@ -69,7 +72,13 @@ function parseArgs(argv: string[]): ParsedArgs {
   let i = 0;
   if (argv[0] && !argv[0].startsWith("-")) {
     const cmd = argv[0];
-    if (cmd === "audit" || cmd === "prune" || cmd === "suggest" || cmd === "help") {
+    if (
+      cmd === "audit" ||
+      cmd === "prune" ||
+      cmd === "suggest" ||
+      cmd === "cost" ||
+      cmd === "help"
+    ) {
       args.command = cmd;
       i = 1;
     }
@@ -189,6 +198,16 @@ async function main() {
       process.stdout.write(formatJson(report) + "\n");
     } else {
       process.stdout.write(formatSuggestReport(report, { color: args.color }) + "\n");
+    }
+    return;
+  }
+
+  if (args.command === "cost") {
+    const report = await runCost({ days: args.days, claudeDir: args.claudeDir });
+    if (args.json) {
+      process.stdout.write(formatJson(report) + "\n");
+    } else {
+      process.stdout.write(formatCostReport(report, { color: args.color }) + "\n");
     }
     return;
   }

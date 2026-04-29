@@ -10,6 +10,7 @@ import type {
   PruneReport,
 } from "./prune.js";
 import type { SuggestBucket, SuggestReport } from "./suggest.js";
+import type { CostReport, SkillCost } from "./cost.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -483,6 +484,129 @@ export function formatPruneReport(
   }
 
   return lines.join("\n").trimEnd();
+}
+
+export function formatCostReport(
+  report: CostReport,
+  opts: { color: boolean; topN?: number },
+): string {
+  const c = colors(opts.color);
+  const topN = opts.topN ?? 15;
+  const lines: string[] = [];
+
+  const installed = report.perSkill.length;
+  const dead = report.perSkill.filter((s) => s.sessionsInvoked === 0).length;
+  const avgDescTokens = installed > 0
+    ? Math.round(report.totalDescTokens / installed)
+    : 0;
+
+  lines.push(rule(HEADLINE_WIDTH, c));
+  lines.push(
+    ` ${c.bold}skill-graveyard cost${c.reset} ${c.dim}— ${report.windowDays}d window${c.reset}`,
+  );
+  lines.push(
+    ` ${c.bold}${installed}${c.reset} skills × avg ${c.bold}${avgDescTokens}${c.reset} desc tokens = ` +
+      `~${formatTokens(report.totalDescTokens)} loaded per session`,
+  );
+  lines.push(
+    ` × ${report.sessionsAnalyzed} sessions ≈ ${c.bold}${formatTokens(report.totalLoadedTokens)}${c.reset}` +
+      ` of skill-metadata loaded over window`,
+  );
+  if (report.totalLoadedTokens > 0) {
+    const wastePct = Math.round(
+      (report.totalWasteTokens / report.totalLoadedTokens) * 100,
+    );
+    lines.push(
+      ` of which ${c.red}~${formatTokens(report.totalWasteTokens)}${c.reset} ` +
+        `${c.dim}(${wastePct}%) loaded for skills never invoked (${dead} dead)${c.reset}`,
+    );
+  }
+  lines.push(rule(HEADLINE_WIDTH, c));
+  lines.push("");
+
+  if (report.hookInjections.length > 0) {
+    const totalHookTokens = report.hookInjections.reduce(
+      (s, h) => s + h.totalTokens,
+      0,
+    );
+    lines.push(
+      `${c.yellow}${c.bold}HOOK INJECTIONS${c.reset}  ${c.dim}per-session text from SessionStart hooks (additional load on top of skill metadata)${c.reset}`,
+    );
+    const nameW = Math.max(
+      ...report.hookInjections.map((h) => h.hookName.length),
+    );
+    for (const h of report.hookInjections) {
+      lines.push(
+        `  ${h.hookName.padEnd(nameW)}  ` +
+          `${c.dim}${h.avgTokens.toString().padStart(5)} t/sess${c.reset}  ` +
+          `× ${h.occurrences} sessions  ` +
+          `= ${c.bold}${formatTokens(h.totalTokens)}${c.reset}`,
+      );
+    }
+    lines.push(
+      `  ${c.dim}total hook injection cost over window: ${formatTokens(totalHookTokens)}${c.reset}`,
+    );
+    lines.push("");
+  }
+
+  const wasters = report.perSkill
+    .filter((s) => s.waste > 0)
+    .slice(0, topN);
+  const earners = report.perSkill
+    .filter((s) => s.sessionsInvoked > 0)
+    .sort((a, b) => b.sessionsInvoked / Math.max(1, b.sessionsLoaded) - a.sessionsInvoked / Math.max(1, a.sessionsLoaded))
+    .slice(0, 5);
+
+  if (wasters.length) {
+    lines.push(
+      `${c.red}${c.bold}TOP WASTERS (${wasters.length}${report.perSkill.filter((s) => s.waste > 0).length > topN ? ` of ${report.perSkill.filter((s) => s.waste > 0).length}` : ""})${c.reset}  ${c.dim}desc tokens × sessions where never invoked, descending${c.reset}`,
+    );
+    lines.push(...formatCostTable(wasters, c));
+    lines.push("");
+  }
+
+  if (earners.length) {
+    lines.push(
+      `${c.green}${c.bold}EARNING THEIR KEEP${c.reset}  ${c.dim}top by invocation rate${c.reset}`,
+    );
+    lines.push(...formatCostTable(earners, c));
+    lines.push("");
+  }
+
+  lines.push(
+    `${c.dim}note: ~${report.charsPerToken} chars ≈ 1 token (rough estimate).${c.reset}`,
+  );
+  lines.push(
+    `${c.dim}cached prompts cost less in $ but still consume context budget and rate limits.${c.reset}`,
+  );
+
+  return lines.join("\n").trimEnd();
+}
+
+function formatCostTable(rows: SkillCost[], c: typeof C): string[] {
+  const nameW = Math.max(...rows.map((r) => r.invokeName.length));
+  const sourceW = Math.max(...rows.map((r) => r.source.length));
+  const lines: string[] = [];
+  for (const r of rows) {
+    const name = r.invokeName.padEnd(nameW);
+    const src = r.source.padEnd(sourceW);
+    const desc = String(r.descTokens).padStart(4);
+    const inv = String(r.sessionsInvoked).padStart(3);
+    const loaded = String(r.sessionsLoaded).padStart(3);
+    const waste = formatTokens(r.waste).padStart(8);
+    lines.push(
+      `  ${name}  ${c.dim}${src}${c.reset}  ` +
+        `${c.dim}${desc} t × ${inv}/${loaded} ses${c.reset}  ` +
+        `${r.waste > 0 ? c.red : c.green}${waste}${c.reset}`,
+    );
+  }
+  return lines;
+}
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return String(n);
 }
 
 export function formatSuggestReport(

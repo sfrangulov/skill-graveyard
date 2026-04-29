@@ -26,7 +26,7 @@ Requires Node 18+.
 
 ## Usage
 
-Three subcommands. `audit` is the default and is what you usually run.
+Four subcommands. `audit` is the default and is what you usually run.
 
 ```sh
 skill-graveyard                       # 30-day audit, pretty table
@@ -38,6 +38,7 @@ skill-graveyard prune                 # plan: print every command that would dis
 skill-graveyard prune --apply         # execute the unlinks (plugin removals always print only)
 
 skill-graveyard suggest               # classify hallucinated/missing into actionable buckets
+skill-graveyard cost                  # estimate token cost of installed skill metadata
 ```
 
 ### `audit`
@@ -72,6 +73,21 @@ Classifies the `MISSING` and `HALLUCINATED` rows into actionable buckets:
 - **TOOL/SKILL CONFUSION** — Claude invoked a built-in CC tool name (`Bash`, `Read`, `Write`, `Edit`, etc.) as a skill. Known model failure mode, not actionable on your side.
 - **LIKELY TYPO** — invoke name is within Levenshtein distance 2 of an installed skill. Worth reviewing the call sites.
 - **UNCLASSIFIED** — no pattern matched. Manual review.
+
+### `cost`
+
+Estimates how many tokens your skill metadata consumes per session vs. how many of those tokens cover skills Claude actually invokes. Each installed skill's `description` field (from `SKILL.md` frontmatter) is loaded into the `Skill` tool definition on every API request, even if the skill is never invoked.
+
+```
+TOP WASTERS  desc tokens × sessions where never invoked
+  playwright-best-practices    user           246 t × 0/159   39.1K
+  ai-sdk                        user           151 t × 0/159   24.0K
+  ...
+```
+
+Also surfaces hook injections (text auto-added to every session by `SessionStart` hooks) — these can dwarf skill metadata costs.
+
+Token estimates use a `~4 chars / token` approximation (rough). Anthropic prompt caching reduces dollar cost significantly, but loaded tokens still consume your context window and rate-limit budget.
 
 ## What it reads
 
