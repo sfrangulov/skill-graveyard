@@ -11,6 +11,7 @@ import type {
 } from "./prune.js";
 import type { SuggestBucket, SuggestReport } from "./suggest.js";
 import type { CostReport, SkillCost } from "./cost.js";
+import type { OutdatedReport, OutdatedRow } from "./outdated.js";
 import type { ProjectsReport, ProjectStat } from "./projects.js";
 
 const C = {
@@ -796,4 +797,96 @@ function formatProjectBlock(
     lines.push(`  ${c.dim}…and ${more} more${c.reset}`);
   }
   return lines;
+}
+
+const OUTDATED_AFFECTS_LIMIT = 5;
+
+function formatAffects(skills: string[]): string | null {
+  if (skills.length === 0) return null;
+  if (skills.length <= OUTDATED_AFFECTS_LIMIT) return `affects: ${skills.join(", ")}`;
+  const head = skills.slice(0, OUTDATED_AFFECTS_LIMIT).join(", ");
+  const more = skills.length - OUTDATED_AFFECTS_LIMIT;
+  return `affects: ${head} (and ${more} more)`;
+}
+
+function formatOutdatedRowLines(row: OutdatedRow, c: typeof C, indent: string): string[] {
+  const lines: string[] = [];
+  const ver = `${row.installedVersion} → ${row.latestVersion}`;
+  lines.push(`${indent}${c.bold}${row.name}${c.reset}  ${ver}`);
+  for (const cmd of row.upgradeHint ?? []) {
+    lines.push(`${indent}  ${c.dim}→ ${cmd}${c.reset}`);
+  }
+  if (row.reason) {
+    lines.push(`${indent}  ${c.dim}reason: ${row.reason}${c.reset}`);
+  }
+  const affects = formatAffects(row.affectedSkills);
+  if (affects) {
+    lines.push(`${indent}  ${c.dim}${affects}${c.reset}`);
+  }
+  return lines;
+}
+
+export function formatOutdatedReport(
+  report: OutdatedReport,
+  opts: { color: boolean },
+): string {
+  const c = colors(opts.color);
+  const lines: string[] = [];
+
+  const checked = relativeTime(new Date(report.windowFetchedAt).toISOString());
+  const cachePart =
+    report.cacheHits > 0 ? ` ${c.dim}(${report.cacheHits} cache hits)${c.reset}` : "";
+  lines.push(
+    `${c.bold}skill-graveyard outdated${c.reset} ${c.dim}— checked ${checked}${c.reset}${cachePart}`,
+  );
+
+  const plugins = report.rows.filter((r) => r.kind === "plugin").length;
+  const gits = report.rows.filter((r) => r.kind === "git").length;
+  const { outdated, upToDate, unknown, errored } = report.counters;
+  const planParts: string[] = [
+    `${plugins} plugin${plugins === 1 ? "" : "s"}, ${gits} skill repo${gits === 1 ? "" : "s"}`,
+    `${c.yellow}${outdated} outdated${c.reset}`,
+    `${c.green}${upToDate} up-to-date${c.reset}`,
+  ];
+  if (unknown > 0) planParts.push(`${c.cyan}${unknown} unknown${c.reset}`);
+  if (errored > 0) planParts.push(`${c.red}${errored} errored${c.reset}`);
+  lines.push(`${c.dim}plan:${c.reset} ${planParts.join(` ${c.dim}·${c.reset} `)}`);
+  lines.push("");
+
+  if (outdated === 0 && unknown === 0 && errored === 0) {
+    lines.push(`${c.dim}(all current)${c.reset}`);
+    return lines.join("\n").trimEnd();
+  }
+
+  const outdatedRows = report.rows.filter((r) => r.status === "outdated");
+  if (outdatedRows.length) {
+    lines.push(`${c.yellow}${c.bold}OUTDATED (${outdatedRows.length})${c.reset}`);
+    const outdatedPlugins = outdatedRows.filter((r) => r.kind === "plugin");
+    const outdatedGits = outdatedRows.filter((r) => r.kind === "git");
+    if (outdatedPlugins.length) {
+      lines.push(`  ${c.bold}plugins (${outdatedPlugins.length})${c.reset}`);
+      for (const row of outdatedPlugins) lines.push(...formatOutdatedRowLines(row, c, "    "));
+    }
+    if (outdatedGits.length) {
+      lines.push(`  ${c.bold}skill repos (${outdatedGits.length})${c.reset}`);
+      for (const row of outdatedGits) lines.push(...formatOutdatedRowLines(row, c, "    "));
+    }
+    lines.push("");
+  }
+
+  const unknownRows = report.rows.filter((r) => r.status === "unknown");
+  if (unknownRows.length) {
+    lines.push(`${c.cyan}${c.bold}UNKNOWN (${unknownRows.length})${c.reset}`);
+    for (const row of unknownRows) lines.push(...formatOutdatedRowLines(row, c, "  "));
+    lines.push("");
+  }
+
+  const erroredRows = report.rows.filter((r) => r.status === "errored");
+  if (erroredRows.length) {
+    lines.push(`${c.red}${c.bold}ERRORED (${erroredRows.length})${c.reset}`);
+    for (const row of erroredRows) lines.push(...formatOutdatedRowLines(row, c, "  "));
+    lines.push("");
+  }
+
+  return lines.join("\n").trimEnd();
 }

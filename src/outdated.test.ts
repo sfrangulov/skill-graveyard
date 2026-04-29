@@ -12,8 +12,21 @@ import {
   runOutdated,
   type GitSource,
   type PluginSource,
+  type OutdatedReport,
 } from "./outdated.js";
+import { formatOutdatedReport } from "./format.js";
 import type { Fetcher } from "./fetcher.js";
+
+function mkReport(rows: OutdatedReport["rows"], cacheHits = 0): OutdatedReport {
+  const counters = { outdated: 0, upToDate: 0, unknown: 0, errored: 0 };
+  for (const r of rows) {
+    if (r.status === "outdated") counters.outdated++;
+    else if (r.status === "up-to-date") counters.upToDate++;
+    else if (r.status === "unknown") counters.unknown++;
+    else counters.errored++;
+  }
+  return { windowFetchedAt: Date.now(), cacheHits, rows, counters };
+}
 
 async function withClaudeDir<T>(
   fn: (claudeDir: string) => Promise<T>,
@@ -441,4 +454,100 @@ test("runOutdated counters consistent with returned rows", async () => {
       );
     },
   );
+});
+
+test("formatOutdatedReport prints '(all current)' when nothing outdated", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "x@m", status: "up-to-date", installedVersion: "1.0.0", latestVersion: "1.0.0", affectedSkills: [] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /\(all current\)/);
+  assert.doesNotMatch(s, /OUTDATED/);
+});
+
+test("formatOutdatedReport groups outdated plugins under 'plugins' subheader", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "foo@m", status: "outdated", installedVersion: "1.0.0", latestVersion: "1.1.0", affectedSkills: [], upgradeHint: ["claude plugin update foo@m"] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /OUTDATED \(1\)/);
+  assert.match(s, /plugins \(1\)/);
+  assert.match(s, /foo@m/);
+});
+
+test("formatOutdatedReport groups outdated git sources under 'skill repos' subheader", () => {
+  const r = mkReport([
+    { kind: "git", name: "~/repo", status: "outdated", installedVersion: "abc1234", latestVersion: "def5678", affectedSkills: ["one"], upgradeHint: ["git -C /home/u/repo pull --ff-only"] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /skill repos \(1\)/);
+  assert.match(s, /~\/repo/);
+});
+
+test("formatOutdatedReport prints upgrade hint with '→' prefix after each outdated row", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "foo@m", status: "outdated", installedVersion: "1.0.0", latestVersion: "1.1.0", affectedSkills: [], upgradeHint: ["claude plugin update foo@m"] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /→ claude plugin update foo@m/);
+});
+
+test("formatOutdatedReport prints multi-line upgrade hint (e.g. reinstall)", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "foo@m", status: "outdated", installedVersion: "unknown", latestVersion: "1.0.0", affectedSkills: [], upgradeHint: ["claude plugin remove foo@m", "claude plugin install foo@m"] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /→ claude plugin remove foo@m/);
+  assert.match(s, /→ claude plugin install foo@m/);
+});
+
+test("formatOutdatedReport truncates affected-skills list to 5 with '(and N more)'", () => {
+  const skills = ["a", "b", "c", "d", "e", "f", "g"];
+  const r = mkReport([
+    { kind: "plugin", name: "foo@m", status: "outdated", installedVersion: "1.0.0", latestVersion: "1.1.0", affectedSkills: skills, upgradeHint: ["claude plugin update foo@m"] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /affects:.*a, b, c, d, e \(and 2 more\)/);
+});
+
+test("formatOutdatedReport omits 'affects:' line when no skills", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "foo@m", status: "outdated", installedVersion: "1.0.0", latestVersion: "1.1.0", affectedSkills: [], upgradeHint: ["claude plugin update foo@m"] },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.doesNotMatch(s, /affects:/);
+});
+
+test("formatOutdatedReport prints reason line when row.reason is set", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "ghost@m", status: "unknown", installedVersion: "1.0.0", latestVersion: "?", affectedSkills: [], reason: "no registered marketplace" },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /UNKNOWN \(1\)/);
+  assert.match(s, /no registered marketplace/);
+});
+
+test("formatOutdatedReport prints ERRORED section with reason inline", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "x@m", status: "errored", installedVersion: "1.0.0", latestVersion: "?", affectedSkills: [], reason: "503 Service Unavailable" },
+  ]);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /ERRORED \(1\)/);
+  assert.match(s, /503 Service Unavailable/);
+});
+
+test("formatOutdatedReport headline reports cache hits when > 0", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "x@m", status: "up-to-date", installedVersion: "1.0.0", latestVersion: "1.0.0", affectedSkills: [] },
+  ], 3);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.match(s, /3 cache hits/);
+});
+
+test("formatOutdatedReport headline omits cache-hits parenthetical when 0", () => {
+  const r = mkReport([
+    { kind: "plugin", name: "x@m", status: "up-to-date", installedVersion: "1.0.0", latestVersion: "1.0.0", affectedSkills: [] },
+  ], 0);
+  const s = formatOutdatedReport(r, { color: false });
+  assert.doesNotMatch(s, /cache hits/);
 });
