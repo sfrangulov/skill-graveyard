@@ -675,6 +675,37 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
       </div>
     </article>
 
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">outdated</span>
+        <span class="sig">[--no-cache] [--ttl &lt;min&gt;] [--json]</span>
+      </div>
+      <p>Checks every installed plugin (against its marketplace's <code>marketplace.json</code>) and every git-tracked user/agent skill (against <code>git ls-remote</code>) for newer versions upstream. Network-bound — the only subcommand that calls out. Results cached at <code>~/.cache/skill-graveyard/outdated/</code> with a 60-minute TTL by default.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ skill-graveyard outdated</span></div>
+<pre><span class="h">skill-graveyard outdated</span> <span class="mt">— checked just now</span> <span class="mt">(3 cache hits)</span>
+<span class="mt">plan:</span> 12 plugins, 1 skill repo <span class="mt">·</span> <span class="x">2 outdated</span> <span class="mt">·</span> <span class="a">9 up-to-date</span> <span class="mt">·</span> <span class="m">2 unknown</span>
+
+<span class="x">OUTDATED (2)</span>
+  <span class="h">plugins (1)</span>
+    <span class="h">superpowers@claude-plugins-official</span>  b7a8f76 → 6efe32c
+      <span class="mt">→ claude plugin update superpowers@claude-plugins-official</span>
+      <span class="mt">affects: brainstorming, executing-plans, writing-plans (and 11 more)</span>
+  <span class="h">skill repos (1)</span>
+    <span class="h">~/projects/my-skills</span>  abc1234 → def5678
+      <span class="mt">→ git -C ~/projects/my-skills pull --ff-only</span>
+      <span class="mt">affects: foo, bar</span>
+
+<span class="m">UNKNOWN (2)</span>
+  <span class="h">claude-mem@thedotmack</span>  unknown → 1abc234
+    <span class="mt">→ claude plugin remove claude-mem@thedotmack</span>
+    <span class="mt">→ claude plugin install claude-mem@thedotmack</span>
+    <span class="mt">reason: installed without version metadata; reinstall to refresh</span>
+</pre>
+      </div>
+      <p>Each plugin is matched against its marketplace entry shape: explicit <code>version</code>, pinned commit SHA, or upstream HEAD via <code>git ls-remote</code>. Plugins recorded as <code>installedVersion: "unknown"</code> get a reinstall hint instead of an update one — Claude Code only stamps the SHA on fresh installs.</p>
+    </article>
+
     <p class="caption">all output above is real — captured locally with <code>npx tsx src/cli.ts &lt;cmd&gt; --days 30 --no-color</code>.</p>
   </section>
 
@@ -725,8 +756,8 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
         <p>Skills under <code>&lt;project&gt;/.claude/skills/</code> are intentional per-project artifacts; <code>prune</code> ignores them.</p>
       </div>
       <div class="item">
-        <h4>It does NOT phone home</h4>
-        <p>All analysis is local. No telemetry, no network calls, no hidden uploads. The CLI binary's only runtime dependency is <code>gpt-tokenizer</code>.</p>
+        <h4>It does NOT phone home — except when you run <code>outdated</code></h4>
+        <p>Five of the six subcommands are entirely local. <code>outdated</code> is the explicit exception: it fetches each registered marketplace's <code>marketplace.json</code> and runs <code>git ls-remote</code> against marketplace and skill-repo origins. Results are cached at <code>~/.cache/skill-graveyard/outdated/</code>. Everything else stays local. No telemetry, no hidden uploads.</p>
       </div>
       <div class="item">
         <h4>Pipe to jq</h4>

@@ -39,7 +39,7 @@ Requires Node 18+.
 
 ## Usage
 
-Five subcommands. `audit` is the default and is what you usually run.
+Six subcommands. `audit` is the default and is what you usually run.
 
 ```sh
 skill-graveyard                       # 30-day audit, pretty table
@@ -53,6 +53,7 @@ skill-graveyard prune --apply         # execute the unlinks (plugin removals alw
 skill-graveyard suggest               # classify hallucinated/missing into actionable buckets
 skill-graveyard projects              # break down skill usage per project (from session cwds)
 skill-graveyard cost                  # estimate token cost of installed skill metadata
+skill-graveyard outdated              # check installed plugins / git-tracked skills for upstream updates (network)
 ```
 
 ### `audit`
@@ -120,13 +121,43 @@ Also surfaces hook injections (text auto-added to every session by `SessionStart
 
 Token counts use the `cl100k_base` BPE tokenizer (a proxy for Claude's tokenizer, which Anthropic doesn't ship publicly for Claude 3+). Expect 5–15% drift from the real tokenizer. Anthropic prompt caching reduces dollar cost significantly, but loaded tokens still consume your context window and rate-limit budget.
 
+### `outdated`
+
+Checks installed plugins and git-tracked user/agent skills against their upstream sources, prints what's behind, and gives the exact command to update each. Network-bound — the only subcommand that calls out. Results are cached at `~/.cache/skill-graveyard/outdated/` with a 60-minute TTL by default.
+
+```
+skill-graveyard outdated — checked just now (3 cache hits)
+plan: 12 plugins, 1 skill repo · 2 outdated · 9 up-to-date · 2 unknown
+
+OUTDATED (2)
+  plugins (1)
+    superpowers@claude-plugins-official  b7a8f76 → 6efe32c
+      → claude plugin update superpowers@claude-plugins-official
+      affects: brainstorming, executing-plans, writing-plans (and 11 more)
+  skill repos (1)
+    ~/projects/my-skills  abc1234 → def5678
+      → git -C ~/projects/my-skills pull --ff-only
+      affects: foo, bar
+```
+
+For each plugin it follows the marketplace's `marketplace.json` to pick the right comparison: explicit version, pinned commit SHA, or upstream HEAD via `git ls-remote`. Plugins installed without a recorded version (`installedVersion: "unknown"`) are flagged with a reinstall hint instead of an update one — Claude Code's plugin manager records SHAs only on fresh installs.
+
+```sh
+skill-graveyard outdated --no-cache       # force refetch
+skill-graveyard outdated --ttl 0          # equivalent: zero TTL = always miss
+skill-graveyard outdated --ttl 1440       # cache for 24h
+skill-graveyard outdated --json | jq '.rows[] | select(.status=="outdated")'
+```
+
 ## What it reads
 
 - `~/.claude/projects/**/*.jsonl` — session logs (skill invocations and `cwd` per session live in `tool_use` events)
 - `~/.claude/plugins/installed_plugins.json` — registered plugins
+- `~/.claude/plugins/known_marketplaces.json` — marketplace → repo mapping (for `outdated`)
 - `~/.claude/skills/`, `~/.agents/skills/` — user-level skills
 - `<plugin-install-path>/skills/` — plugin-bundled skills
 - `<cwd-and-ancestors>/.claude/skills/` — project-scoped skills, walking up from each session's cwd to your home directory
+- Network — only when `outdated` runs: `https://raw.githubusercontent.com/<repo>/HEAD/.claude-plugin/marketplace.json` for each registered marketplace, plus `git ls-remote` against marketplace and skill-repo origins. Results cached at `~/.cache/skill-graveyard/outdated/`.
 
 Pass `--claude-dir` to override the Claude home location.
 
@@ -134,7 +165,7 @@ Pass `--claude-dir` to override the Claude home location.
 
 - **Does not auto-disable plugin skills.** Plugin removal is a Claude Code slash command (`/plugin remove`) and invoking it from outside the runtime is fragile, so `prune` only prints the command. Run it inside Claude Code yourself.
 - **Does not touch project-scoped skills.** Skills under `<project>/.claude/skills/` are intentional per-project artifacts; `prune` ignores them.
-- **Does not phone home.** All analysis is local. No telemetry, no network calls.
+- **Does not phone home except when running `outdated`.** Five of the six subcommands are entirely local. `outdated` is the explicit exception — it fetches each registered marketplace's `marketplace.json` and runs `git ls-remote` against marketplace and skill-repo origins. Results are cached locally; everything else stays local.
 
 ## License
 
