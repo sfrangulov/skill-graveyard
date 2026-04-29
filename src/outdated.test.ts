@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { enumeratePluginSources } from "./outdated.js";
+import { spawnSync } from "node:child_process";
+import { enumeratePluginSources, enumerateGitSources } from "./outdated.js";
 
 async function withClaudeDir<T>(
   fn: (claudeDir: string) => Promise<T>,
@@ -17,6 +18,16 @@ async function withClaudeDir<T>(
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+function gitInit(dir: string) {
+  spawnSync("git", ["init", "-q", "-b", "main"], { cwd: dir });
+  spawnSync(
+    "git",
+    ["-c", "user.email=x@x", "-c", "user.name=x", "commit", "--allow-empty", "-m", "init", "-q"],
+    { cwd: dir },
+  );
+  spawnSync("git", ["remote", "add", "origin", "https://example.com/foo/bar.git"], { cwd: dir });
 }
 
 test("enumeratePluginSources reads installed plugins and resolves marketplace repo", async () => {
@@ -92,4 +103,56 @@ test("enumeratePluginSources returns [] when installed_plugins.json is missing",
     },
     async () => {},
   );
+});
+
+test("enumerateGitSources groups skills sharing a git root into one source", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "skg-git-"));
+  try {
+    const claudeDir = join(dir, ".claude");
+    await mkdir(join(claudeDir, "skills", "foo"), { recursive: true });
+    await mkdir(join(claudeDir, "skills", "bar"), { recursive: true });
+    await writeFile(join(claudeDir, "skills", "foo", "SKILL.md"), "---\nname: foo\n---\n");
+    await writeFile(join(claudeDir, "skills", "bar", "SKILL.md"), "---\nname: bar\n---\n");
+    gitInit(claudeDir);
+
+    const sources = await enumerateGitSources(claudeDir);
+    assert.equal(sources.length, 1);
+    assert.deepEqual(sources[0]!.affectedSkills, ["bar", "foo"]);
+    assert.equal(sources[0]!.rootPath, claudeDir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("enumerateGitSources skips skills not under any git tree", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "skg-git-"));
+  try {
+    const claudeDir = join(dir, ".claude");
+    await mkdir(join(claudeDir, "skills", "foo"), { recursive: true });
+    await writeFile(join(claudeDir, "skills", "foo", "SKILL.md"), "---\nname: foo\n---\n");
+    // No git init — skill is not under any git tree.
+    const sources = await enumerateGitSources(claudeDir);
+    assert.deepEqual(sources, []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("enumerateGitSources captures remote URL, branch, and local SHA", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "skg-git-"));
+  try {
+    const claudeDir = join(dir, ".claude");
+    await mkdir(join(claudeDir, "skills", "foo"), { recursive: true });
+    await writeFile(join(claudeDir, "skills", "foo", "SKILL.md"), "---\nname: foo\n---\n");
+    gitInit(claudeDir);
+
+    const sources = await enumerateGitSources(claudeDir);
+    assert.equal(sources.length, 1);
+    const s = sources[0]!;
+    assert.equal(s.remoteUrl, "https://example.com/foo/bar.git");
+    assert.equal(s.branch, "main");
+    assert.match(s.installedSha, /^[0-9a-f]{40}$/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

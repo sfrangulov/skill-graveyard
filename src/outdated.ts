@@ -1,5 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { discoverInstalledSkills, findGitRoot } from "./discovery.js";
+import { resolveClaudePaths } from "./paths.js";
 
 export interface PluginSource {
   /** "<name>@<marketplace>" */
@@ -73,6 +76,52 @@ export async function enumeratePluginSources(claudeDir: string): Promise<PluginS
         affectedSkills: [],
       });
     }
+  }
+  return out;
+}
+
+export interface GitSource {
+  rootPath: string;
+  displayName: string;
+  remoteUrl: string | null;
+  branch: string | null;
+  installedSha: string;
+  affectedSkills: string[];
+}
+
+function git(cwd: string, args: string[]): string | null {
+  const r = spawnSync("git", args, { cwd, encoding: "utf-8" });
+  if (r.status !== 0) return null;
+  return r.stdout.trim();
+}
+
+export async function enumerateGitSources(claudeDir: string): Promise<GitSource[]> {
+  const paths = resolveClaudePaths(claudeDir);
+  const skills = await discoverInstalledSkills(paths);
+  const byRoot = new Map<string, { skills: string[] }>();
+  for (const skill of skills) {
+    if (skill.source.kind !== "user" && skill.source.kind !== "agents") continue;
+    const root = findGitRoot(skill.skillDir);
+    if (!root) continue;
+    const entry = byRoot.get(root) ?? { skills: [] };
+    entry.skills.push(skill.bareName);
+    byRoot.set(root, entry);
+  }
+  const out: GitSource[] = [];
+  for (const [root, { skills: names }] of byRoot) {
+    const remoteUrl = git(root, ["remote", "get-url", "origin"]);
+    const branch = git(root, ["symbolic-ref", "--short", "HEAD"]);
+    const sha = git(root, ["rev-parse", "HEAD"]) ?? "";
+    const home = process.env["HOME"];
+    const displayName = home && root.startsWith(home + "/") ? "~" + root.slice(home.length) : root;
+    out.push({
+      rootPath: root,
+      displayName,
+      remoteUrl,
+      branch,
+      installedSha: sha,
+      affectedSkills: names.sort(),
+    });
   }
   return out;
 }
