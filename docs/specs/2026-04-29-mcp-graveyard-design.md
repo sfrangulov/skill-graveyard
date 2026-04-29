@@ -3,6 +3,15 @@
 Date: 2026-04-29
 Status: draft, awaiting user review before implementation plan
 
+## Implementation phasing
+
+This spec ships in two independent plans, each producing a working release:
+
+1. **Phase 1 — monorepo migration.** Move existing skill-graveyard into workspaces, extract `@skill-graveyard/core`, no user-visible behavior change. Ships `skill-graveyard@0.8.0`.
+2. **Phase 2 — mcp-graveyard v1.** New package with `audit` / `prune` / `projects` / `suggest`. Ships `mcp-graveyard@0.1.0`.
+
+Phase 2 depends on Phase 1 landing.
+
 ## Goal
 
 Sister tool to `skill-graveyard`, applying the same dual-signal idea to **MCP server tools** instead of skills:
@@ -27,7 +36,7 @@ skill-graveyard/                          (repo + workspace root)
 ├── package.json                          { "private": true, "workspaces": ["packages/*"] }
 ├── tsconfig.json                         (base config with project references)
 ├── packages/
-│   ├── core/                             @skill-graveyard/core — private, never published
+│   ├── core/                             @skill-graveyard/core — published, minimal public API
 │   │   ├── src/
 │   │   │   ├── parser.ts                 generic: parseSession(filepath, projectKey, predicate, extractor)
 │   │   │   ├── format.ts                 sparkbars, table, color (unchanged)
@@ -36,7 +45,7 @@ skill-graveyard/                          (repo + workspace root)
 │   │   │   ├── tokenizer.ts              cl100k_base wrapper
 │   │   │   ├── known_tools.ts            built-in CC tool list
 │   │   │   └── index.ts
-│   │   └── package.json                  { "private": true, "version": "0.0.0" }
+│   │   └── package.json                  { "version": "0.1.0" }   # published
 │   ├── skill-graveyard/                  publishes as skill-graveyard@0.8.0 (monorepo migration bump)
 │   │   ├── src/                          existing src/ moved here verbatim, then refactored to import from core
 │   │   ├── commands/audit-skills.md
@@ -56,7 +65,7 @@ skill-graveyard/                          (repo + workspace root)
 
 ### Key decisions
 
-1. **`@skill-graveyard/core` is private.** Not published to npm. Each CLI bundles core via `tsc` project references (or build-time inline). Lets us evolve core's API without semver pain. External consumers don't need core — both CLIs are end-user tools, not libraries.
+1. **`@skill-graveyard/core` is published.** Reason: npm workspaces without a bundler can't ship a "private" core to end users — `npm i skill-graveyard` would resolve a transitive `@skill-graveyard/core` dep that doesn't exist on the registry. Adding a bundler (tsup/esbuild) just to keep core unpublished is more toolchain than the win is worth. Tradeoff: each core API change requires a publish, but core's surface is small (parser, format, discovery, paths, tokenizer, known_tools) and stable, so bumps are rare. External consumers technically *can* depend on core, but it has no docs and no semver-stability promise — best-effort only.
 2. **`parser.ts` is generalised.** Today it hardcodes `name === "Skill"`. Becomes `parseSession(filepath, projectKey, predicate, extractor)`:
    - skill-graveyard: `predicate = item => item.name === "Skill"`, extractor pulls `input.skill`.
    - mcp-graveyard: `predicate = item => item.name?.startsWith("mcp__")`, extractor parses `mcp__<server>__<tool>`.
@@ -342,20 +351,26 @@ This deviates from current CI (which uses default `fail-fast: true`) — explici
 
 ### Versioning
 
-- **Lockstep within a package**: `packages/<name>/package.json` and `packages/<name>/.claude-plugin/plugin.json` versions must match (same rule as today).
-- **Independent across packages**: `skill-graveyard` jumps to `0.8.0` (monorepo migration bump). `mcp-graveyard` starts at `0.1.0`.
-- **Core** is `private: true`, version frozen at `0.0.0`, never bumped.
+- **Lockstep within a package**: `packages/<name>/package.json` and `packages/<name>/.claude-plugin/plugin.json` versions must match (same rule as today). Core has no plugin manifest, so its version is standalone.
+- **Independent across packages**: `skill-graveyard` jumps to `0.8.0` (monorepo migration bump). `mcp-graveyard` starts at `0.1.0`. `@skill-graveyard/core` starts at `0.1.0` and bumps independently when its API changes.
+- **Publish order matters**: when both `core` and a CLI need to release, publish `core` first, bump CLI's `@skill-graveyard/core` dep range, then publish CLI.
 
 ### Release flow per package
 
 ```sh
+# core (only when its API changed)
+npm pack --workspace=@skill-graveyard/core --dry-run
+npm publish --workspace=@skill-graveyard/core --otp=NNNNNN
+git tag -a core@v0.1.0
+
+# then CLI
 npm pack --workspace=mcp-graveyard --dry-run
 npm publish --workspace=mcp-graveyard --otp=NNNNNN     # OTP from user
 git tag -a mcp-graveyard@v0.1.0
 gh release create mcp-graveyard@v0.1.0 ...
 ```
 
-Tags get `<package>@v` prefix to disambiguate.
+Tags get `<package>@v` prefix to disambiguate. `core@v...` is internal-facing (no GitHub release).
 
 ### Slash command + plugin
 
