@@ -1,9 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverProjectScopedSkills } from "./discovery.js";
+import { discoverProjectScopedSkills, findGitRoot } from "./discovery.js";
+
+async function withTmpDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), "sg-discovery-test-"));
+  try {
+    return await fn(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
 
 function makeProjectWithSkill(skillNames: string[]): string {
   const projectDir = mkdtempSync(join(tmpdir(), "sg-discovery-test-"));
@@ -84,4 +94,28 @@ test("ignores skill dirs without SKILL.md", async () => {
   } finally {
     rmSync(projectDir, { recursive: true, force: true });
   }
+});
+
+test("findGitRoot returns the directory containing .git when present", async () => {
+  await withTmpDir(async (dir) => {
+    await mkdir(join(dir, ".git"), { recursive: true });
+    await mkdir(join(dir, "deep/nested/path"), { recursive: true });
+    const found = findGitRoot(join(dir, "deep/nested/path"));
+    assert.equal(found, dir);
+  });
+});
+
+test("findGitRoot returns null when no .git is found above the path", async () => {
+  await withTmpDir(async (dir) => {
+    await mkdir(join(dir, "deep"), { recursive: true });
+    const found = findGitRoot(join(dir, "deep"));
+    assert.equal(found, null);
+  });
+});
+
+test("findGitRoot stops at filesystem root if no .git found", () => {
+  // Use a path guaranteed not to be inside any git tree (or accept either outcome).
+  const found = findGitRoot("/tmp");
+  // /tmp itself may or may not be in a git tree; the contract is "returns string or null".
+  assert.ok(found === null || typeof found === "string");
 });

@@ -1,6 +1,7 @@
+import { existsSync } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, parse } from "node:path";
 import type { ClaudePaths } from "./paths.js";
 
 export type SkillSource =
@@ -186,4 +187,17 @@ function dedupeByInvokeName(items: InstalledSkill[]): InstalledSkill[] {
     if (!seen.has(it.invokeName)) seen.set(it.invokeName, it);
   }
   return [...seen.values()];
+}
+
+/** Walks up from `start`, returns the first directory containing a `.git` entry, or null. */
+export function findGitRoot(start: string): string | null {
+  let cur = start;
+  const root = parse(cur).root;
+  while (true) {
+    if (existsSync(join(cur, ".git"))) return cur;
+    if (cur === root) return null;
+    const next = dirname(cur);
+    if (next === cur) return null;
+    cur = next;
+  }
 }
