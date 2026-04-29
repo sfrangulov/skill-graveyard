@@ -38,13 +38,12 @@ skill-graveyard/                          (repo + workspace root)
 ├── packages/
 │   ├── core/                             @skill-graveyard/core — published, minimal public API
 │   │   ├── src/
-│   │   │   ├── parser.ts                 generic: parseSession(filepath, projectKey, predicate, extractor)
-│   │   │   ├── format.ts                 sparkbars, table, color (unchanged)
-│   │   │   ├── discovery.ts              findSessionFiles, findGitRoot
-│   │   │   ├── paths.ts                  claude home resolution
+│   │   │   ├── parser.ts                 findSessionFiles + generic parseToolCalls<T>(filepath, projectKey, predicate, build)
+│   │   │   ├── discovery.ts              findGitRoot, discoverInstalledSkills, discoverProjectScopedSkills
+│   │   │   ├── paths.ts                  claude home resolution (resolveClaudePaths)
 │   │   │   ├── tokenizer.ts              cl100k_base wrapper
 │   │   │   ├── known_tools.ts            built-in CC tool list
-│   │   │   └── index.ts
+│   │   │   └── index.ts                  re-exports
 │   │   └── package.json                  { "version": "0.1.0" }   # published
 │   ├── skill-graveyard/                  publishes as skill-graveyard@0.8.0 (monorepo migration bump)
 │   │   ├── src/                          existing src/ moved here verbatim, then refactored to import from core
@@ -66,11 +65,13 @@ skill-graveyard/                          (repo + workspace root)
 ### Key decisions
 
 1. **`@skill-graveyard/core` is published.** Reason: npm workspaces without a bundler can't ship a "private" core to end users — `npm i skill-graveyard` would resolve a transitive `@skill-graveyard/core` dep that doesn't exist on the registry. Adding a bundler (tsup/esbuild) just to keep core unpublished is more toolchain than the win is worth. Tradeoff: each core API change requires a publish, but core's surface is small (parser, format, discovery, paths, tokenizer, known_tools) and stable, so bumps are rare. External consumers technically *can* depend on core, but it has no docs and no semver-stability promise — best-effort only.
-2. **`parser.ts` is generalised.** Today it hardcodes `name === "Skill"`. Becomes `parseSession(filepath, projectKey, predicate, extractor)`:
-   - skill-graveyard: `predicate = item => item.name === "Skill"`, extractor pulls `input.skill`.
-   - mcp-graveyard: `predicate = item => item.name?.startsWith("mcp__")`, extractor parses `mcp__<server>__<tool>`.
-3. **`outdated`-related code stays in `skill-graveyard`.** `source_resolver`, `fetcher`, `cache` are git/marketplace specific. mcp-graveyard's eventual `outdated` will likely share concepts but not code.
-4. **Migration is a single move.** Existing `src/` is moved to `packages/skill-graveyard/src/` in one atomic commit. No logic changes during the move; refactoring to import from core happens in a follow-up commit.
+2. **`parser.ts` is generalised.** Today it hardcodes `name === "Skill"`. Becomes a generic `parseToolCalls<T>(filepath, projectKey, predicate, build)` plus a thin `parseSession` adapter that preserves the existing skill-graveyard signature:
+   - skill-graveyard: `predicate = item => item.name === "Skill"`, builder pulls `input.skill`.
+   - mcp-graveyard: `predicate = item => item.name?.startsWith("mcp__")`, builder parses `mcp__<server>__<tool>`.
+
+3. **`format.ts` stays in skill-graveyard.** It currently imports types from every subcommand (audit, prune, suggest, cost, outdated, projects); moving it to core would make core depend back on skill-graveyard. mcp-graveyard will get its own `format.ts`. If a real shared subset emerges (color codes, sparkbar primitives), Plan B's first task can be to extract it — but that is reactive, driven by what mcp-graveyard concretely needs, not preemptive.
+4. **`outdated`-related code stays in `skill-graveyard`.** `source_resolver`, `fetcher`, `cache` are git/marketplace specific. mcp-graveyard's eventual `outdated` will likely share concepts but not code.
+5. **Migration happens in stages, not one commit.** The implementation plan (`2026-04-29-monorepo-migration-plan.md`) breaks it into 12 tasks: workspaces bootstrap, file relocation, core skeleton, module extraction, parser generalisation, CI matrix, version bump, verification. Each task ends in a working commit.
 
 ## Data model
 
