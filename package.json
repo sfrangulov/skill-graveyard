@@ -4,7 +4,7 @@
   "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
   "type": "module",
   "bin": {
-    "skill-graveyard": "./dist/cli.js"
+    "skill-graveyard": "dist/cli.js"
   },
   "files": [
     "dist",
