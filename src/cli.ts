@@ -4,14 +4,23 @@ import { runCost } from "./cost.js";
 import {
   formatCostReport,
   formatJson,
+  formatProjectsReport,
   formatPruneReport,
   formatReport,
   formatSuggestReport,
 } from "./format.js";
 import { runPrune, type PruneSourceFilter } from "./prune.js";
+import { runProjects } from "./projects.js";
 import { runSuggest } from "./suggest.js";
 
-type Command = "audit" | "prune" | "suggest" | "cost" | "help" | "version";
+type Command =
+  | "audit"
+  | "prune"
+  | "suggest"
+  | "cost"
+  | "projects"
+  | "help"
+  | "version";
 
 interface ParsedArgs {
   command: Command;
@@ -30,12 +39,15 @@ USAGE
   skill-graveyard [audit] [options]
   skill-graveyard prune [options]
   skill-graveyard suggest [options]
+  skill-graveyard projects [options]
+  skill-graveyard cost [options]
   skill-graveyard --help | --version
 
 COMMANDS
   audit      (default) classify every skill into active | dead | missing | hallucinated
   prune      generate (and optionally execute) removal commands for dead skills
   suggest    classify hallucinated/missing into actionable buckets
+  projects   show skill usage broken down per project (cwd from sessions)
   cost       estimate token cost of installed skill metadata vs invocations
 
 COMMON OPTIONS
@@ -77,6 +89,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       cmd === "prune" ||
       cmd === "suggest" ||
       cmd === "cost" ||
+      cmd === "projects" ||
       cmd === "help"
     ) {
       args.command = cmd;
@@ -159,7 +172,7 @@ async function main() {
     return;
   }
   if (args.command === "version") {
-    process.stdout.write("skill-graveyard 0.1.0\n");
+    process.stdout.write("skill-graveyard 0.6.0\n");
     return;
   }
 
@@ -208,6 +221,16 @@ async function main() {
       process.stdout.write(formatJson(report) + "\n");
     } else {
       process.stdout.write(formatCostReport(report, { color: args.color }) + "\n");
+    }
+    return;
+  }
+
+  if (args.command === "projects") {
+    const report = await runProjects({ days: args.days, claudeDir: args.claudeDir });
+    if (args.json) {
+      process.stdout.write(formatJson(report) + "\n");
+    } else {
+      process.stdout.write(formatProjectsReport(report, { color: args.color }) + "\n");
     }
     return;
   }

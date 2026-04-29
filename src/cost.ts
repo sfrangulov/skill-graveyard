@@ -8,8 +8,9 @@ import {
   type AuditRow,
 } from "./audit.js";
 import { findSessionFiles } from "./parser.js";
+import { estimateTokens, TOKENIZER_NAME } from "./tokenizer.js";
 
-export const CHARS_PER_TOKEN = 4;
+export { estimateTokens, TOKENIZER_NAME };
 
 export interface SkillCost {
   invokeName: string;
@@ -34,7 +35,7 @@ export interface CostReport {
   generatedAt: string;
   windowDays: number;
   sessionsAnalyzed: number;
-  charsPerToken: number;
+  tokenizer: string;
   totalDescTokens: number;
   totalLoadedTokens: number;
   totalInvokedTokens: number;
@@ -46,10 +47,6 @@ export interface CostReport {
 export interface CostOptions {
   days: number;
   claudeDir?: string;
-}
-
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
 export async function runCost(opts: CostOptions): Promise<CostReport> {
@@ -105,7 +102,7 @@ export async function computeCost(
     generatedAt: new Date().toISOString(),
     windowDays,
     sessionsAnalyzed: audit.sessionsAnalyzed,
-    charsPerToken: CHARS_PER_TOKEN,
+    tokenizer: TOKENIZER_NAME,
     totalDescTokens,
     totalLoadedTokens,
     totalInvokedTokens,

@@ -1,14 +1,36 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CHARS_PER_TOKEN, estimateTokens, parseDescription } from "./cost.js";
+import { estimateTokens, TOKENIZER_NAME, parseDescription } from "./cost.js";
 
-test("estimateTokens uses chars/4 ceiling", () => {
+test("estimateTokens returns 0 for empty string", () => {
   assert.equal(estimateTokens(""), 0);
-  assert.equal(estimateTokens("abc"), 1);
-  assert.equal(estimateTokens("abcd"), 1);
-  assert.equal(estimateTokens("abcde"), 2);
-  assert.equal(estimateTokens("a".repeat(100)), 25);
-  assert.equal(CHARS_PER_TOKEN, 4);
+});
+
+test("estimateTokens returns positive integer for non-empty text", () => {
+  const n = estimateTokens("hello world");
+  assert.ok(Number.isInteger(n));
+  assert.ok(n >= 1);
+});
+
+test("estimateTokens uses real BPE, not chars/4", () => {
+  const n = estimateTokens("a".repeat(100));
+  assert.notEqual(n, 25);
+  assert.ok(n >= 1 && n < 25);
+});
+
+test("estimateTokens counts a known phrase predictably", () => {
+  assert.equal(estimateTokens("hello world"), 2);
+  assert.equal(estimateTokens("the quick brown fox"), 4);
+});
+
+test("estimateTokens deterministic for same input", () => {
+  const a = estimateTokens("the quick brown fox jumps over the lazy dog");
+  const b = estimateTokens("the quick brown fox jumps over the lazy dog");
+  assert.equal(a, b);
+});
+
+test("TOKENIZER_NAME exposes encoding identity", () => {
+  assert.equal(TOKENIZER_NAME, "cl100k_base");
 });
 
 test("parseDescription handles plain single-line", () => {

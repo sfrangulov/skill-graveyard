@@ -26,7 +26,7 @@ Requires Node 18+.
 
 ## Usage
 
-Four subcommands. `audit` is the default and is what you usually run.
+Five subcommands. `audit` is the default and is what you usually run.
 
 ```sh
 skill-graveyard                       # 30-day audit, pretty table
@@ -38,6 +38,7 @@ skill-graveyard prune                 # plan: print every command that would dis
 skill-graveyard prune --apply         # execute the unlinks (plugin removals always print only)
 
 skill-graveyard suggest               # classify hallucinated/missing into actionable buckets
+skill-graveyard projects              # break down skill usage per project (from session cwds)
 skill-graveyard cost                  # estimate token cost of installed skill metadata
 ```
 
@@ -74,6 +75,23 @@ Classifies the `MISSING` and `HALLUCINATED` rows into actionable buckets:
 - **LIKELY TYPO** — invoke name is within Levenshtein distance 2 of an installed skill. Worth reviewing the call sites.
 - **UNCLASSIFIED** — no pattern matched. Manual review.
 
+### `projects`
+
+Groups every skill invocation by the `cwd` recorded in your session logs. Surfaces which projects use which skills heavily, which projects pull in hallucinated names, and which skills are project-scoped vs. globally used.
+
+```
+~/projects/api-server  17 ses, 39 calls, 6 skills
+    superpowers:brainstorming                  13×
+    superpowers:writing-plans                  11×
+  ? update-config                               2×
+
+~/projects/dotfiles  2 ses, 2 calls, 2 skills
+    frontend-design                  1×
+    superpowers:brainstorming        1×
+```
+
+`✗` marks errored (hallucinated) calls; `?` marks invoked names that aren't installed but didn't error (likely external-framework skills).
+
 ### `cost`
 
 Estimates how many tokens your skill metadata consumes per session vs. how many of those tokens cover skills Claude actually invokes. Each installed skill's `description` field (from `SKILL.md` frontmatter) is loaded into the `Skill` tool definition on every API request, even if the skill is never invoked.
@@ -87,7 +105,7 @@ TOP WASTERS  desc tokens × sessions where never invoked
 
 Also surfaces hook injections (text auto-added to every session by `SessionStart` hooks) — these can dwarf skill metadata costs.
 
-Token estimates use a `~4 chars / token` approximation (rough). Anthropic prompt caching reduces dollar cost significantly, but loaded tokens still consume your context window and rate-limit budget.
+Token counts use the `cl100k_base` BPE tokenizer (a proxy for Claude's tokenizer, which Anthropic doesn't ship publicly for Claude 3+). Expect 5–15% drift from the real tokenizer. Anthropic prompt caching reduces dollar cost significantly, but loaded tokens still consume your context window and rate-limit budget.
 
 ## What it reads
 

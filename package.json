@@ -1,6 +1,6 @@
 {
   "name": "skill-graveyard",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
   "type": "module",
   "bin": {
@@ -9,7 +9,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    ".claude-plugin",
+    "commands"
   ],
   "engines": {
     "node": ">=18"
@@ -34,5 +36,8 @@
     "@types/node": "^24.12.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "gpt-tokenizer": "^3.4.0"
   }
 }

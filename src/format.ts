@@ -11,6 +11,7 @@ import type {
 } from "./prune.js";
 import type { SuggestBucket, SuggestReport } from "./suggest.js";
 import type { CostReport, SkillCost } from "./cost.js";
+import type { ProjectsReport, ProjectStat } from "./projects.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -574,7 +575,7 @@ export function formatCostReport(
   }
 
   lines.push(
-    `${c.dim}note: ~${report.charsPerToken} chars ≈ 1 token (rough estimate).${c.reset}`,
+    `${c.dim}note: token counts via ${report.tokenizer} (proxy for Claude tokenization; off by 5–15% in practice).${c.reset}`,
   );
   lines.push(
     `${c.dim}cached prompts cost less in $ but still consume context budget and rate limits.${c.reset}`,
@@ -717,4 +718,82 @@ export function formatSuggestReport(
   }
 
   return lines.join("\n").trimEnd();
+}
+
+interface ProjectsFormatOptions {
+  color: boolean;
+  topPerProject?: number;
+}
+
+export function formatProjectsReport(
+  report: ProjectsReport,
+  opts: ProjectsFormatOptions,
+): string {
+  const c = colors(opts.color);
+  const topN = opts.topPerProject ?? 8;
+  const lines: string[] = [];
+
+  lines.push(rule(HEADLINE_WIDTH, c));
+  lines.push(
+    ` ${c.bold}skill-graveyard projects${c.reset} ${c.dim}— ${report.windowDays}d${c.reset}`,
+  );
+  lines.push(
+    ` ${c.bold}${report.totalProjects}${c.reset} projects   ` +
+      `${c.dim}${report.totalSessions} sessions, ${report.totalSkillCalls} skill calls${c.reset}`,
+  );
+  lines.push(rule(HEADLINE_WIDTH, c));
+  lines.push("");
+
+  if (report.projects.length === 0) {
+    lines.push(`${c.dim}(no projects with skill activity in window)${c.reset}`);
+    return lines.join("\n");
+  }
+
+  for (const p of report.projects) {
+    lines.push(...formatProjectBlock(p, topN, c));
+    lines.push("");
+  }
+
+  lines.push(
+    `${c.dim}sorted by total skill calls. ${c.red}✗${c.reset}${c.dim} = hallucinated (errored). ${c.yellow}?${c.reset}${c.dim} = invoked but not installed (no error).${c.reset}`,
+  );
+  return lines.join("\n").trimEnd();
+}
+
+function formatProjectBlock(
+  p: ProjectStat,
+  topN: number,
+  c: typeof C,
+): string[] {
+  const lines: string[] = [];
+  const path = shortenPath(p.displayPath);
+  const summary =
+    `${c.dim}${p.sessions} ses, ${p.totalCalls} calls, ${p.uniqueSkills} skills${c.reset}` +
+    (p.totalErrored > 0 ? ` ${c.red}· ${p.totalErrored} errored${c.reset}` : "");
+  lines.push(`${c.bold}${path}${c.reset}  ${summary}`);
+
+  const top = p.skills.slice(0, topN);
+  const more = p.skills.length - top.length;
+  const nameW = Math.max(...top.map((s) => s.invokeName.length));
+  for (const s of top) {
+    let marker = " ";
+    let nameColor = "";
+    if (!s.installed) {
+      if (s.errored > 0) {
+        marker = `${c.red}✗${c.reset}`;
+        nameColor = c.red;
+      } else {
+        marker = `${c.yellow}?${c.reset}`;
+        nameColor = c.yellow;
+      }
+    }
+    const calls = String(s.calls).padStart(4);
+    lines.push(
+      `  ${marker} ${nameColor}${s.invokeName.padEnd(nameW)}${c.reset}  ${c.dim}${calls}×${c.reset}`,
+    );
+  }
+  if (more > 0) {
+    lines.push(`  ${c.dim}…and ${more} more${c.reset}`);
+  }
+  return lines;
 }
