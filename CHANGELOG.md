@@ -2,6 +2,18 @@
 
 All notable changes to skill-graveyard. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.7.0 — 2026-04-29
+
+### Added
+
+- **`outdated` subcommand** — checks installed plugins against their marketplace's `marketplace.json` and git-tracked user/agent skills against `git ls-remote` to surface what's behind upstream. Prints the exact update command for each row. Network-bound and the only subcommand that performs network calls; results are cached at `~/.cache/skill-graveyard/outdated/` with a 60-minute TTL by default. New flags `--no-cache` and `--ttl <minutes>`.
+- Marketplace entry classifier covers the four real-world `marketplace.json` shapes: explicit `version`, `git-subdir` with pinned `sha`, `url`-source with optional `ref`, and string-sourced (marketplace-internal) plugins.
+- File-based cache with mtime-driven TTL under `~/.cache/skill-graveyard/outdated/`.
+
+### Changed
+
+- README and landing page now document the network posture explicitly: five subcommands stay local, `outdated` is the documented exception.
+
 ## 0.6.3 — 2026-04-29
 
 ### Fixed
