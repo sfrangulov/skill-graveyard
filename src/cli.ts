@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { fileURLToPath } from "node:url";
 import { runAudit, type Category } from "./audit.js";
 import { runCost } from "./cost.js";
 import {
@@ -240,7 +241,12 @@ async function main() {
   }
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
-  process.exit(1);
-});
+// Only run when invoked as the entry point. Without this guard, `import`-ing
+// anything from this file (e.g. from a test) executes the entire CLI, which
+// corrupts Node's test-runner IPC on Node 20 ("Unable to deserialize cloned data").
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err: unknown) => {
+    process.stderr.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.exit(1);
+  });
+}
