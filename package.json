@@ -22,7 +22,7 @@
     "postbuild": "chmod +x dist/cli.js",
     "prepublishOnly": "npm run typecheck && npm run test && npm run build",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test 'src/**/*.test.ts'"
+    "test": "node --import tsx --test src/*.test.ts"
   },
   "repository": {
     "type": "git",
@@ -31,7 +31,7 @@
   "bugs": {
     "url": "https://github.com/sfrangulov/skill-graveyard/issues"
   },
-  "homepage": "https://github.com/sfrangulov/skill-graveyard#readme",
+  "homepage": "https://sfrangulov.github.io/skill-graveyard/",
   "keywords": [
     "claude-code",
     "claude",

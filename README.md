@@ -1,5 +1,7 @@
 # skill-graveyard
 
+Docs & demo: <https://sfrangulov.github.io/skill-graveyard/>
+
 Audit which Claude Code skills you actually use. Parses your local session logs and sorts every skill name that appears into one of four buckets:
 
 1. **Active** — installed AND invoked successfully. Keep.
