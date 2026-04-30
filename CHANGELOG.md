@@ -2,6 +2,14 @@
 
 All notable changes to skill-graveyard. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.8.0 — 2026-04-30
+
+### Changed
+
+- **Repository layout: now an npm workspaces monorepo.** Source moved into `packages/skill-graveyard/`. Shared parsing/discovery primitives extracted into a new published `@skill-graveyard/core` package (no semver-stability promise, mostly internal). The `skill-graveyard` CLI is otherwise unchanged — same subcommands, same flags, same output shapes. End users running `npx skill-graveyard` see no difference.
+- Parser now exposes a generic `parseToolCalls<T>(filepath, projectKey, predicate, build)` in `@skill-graveyard/core`; the existing `parseSession` is preserved as a thin Skill-specific adapter. This is groundwork for a sister CLI auditing MCP server tool usage.
+- CI runs a 4-cell matrix (`{@skill-graveyard/core, skill-graveyard} × {Node 20, 22}`) with `fail-fast: false`.
+
 ## 0.7.0 — 2026-04-29
 
 ### Added
