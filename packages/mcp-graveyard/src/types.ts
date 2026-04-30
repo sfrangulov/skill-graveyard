@@ -20,7 +20,7 @@ export interface McpServerSummary {
   name: string;
   configured: boolean;
   configuredIn: string | null;
-  toolsAdvertised: number;       // distinct mcp__<server>__* names seen in window
+  toolsSeen: number;       // distinct tool names invoked at least once in window
   toolsInvoked: string[];        // tools with ≥1 successful call (sorted)
   toolsErrored: string[];        // tools with InputValidationError (sorted)
   totalCalls: number;

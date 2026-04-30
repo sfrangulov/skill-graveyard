@@ -153,3 +153,34 @@ test("filters by --only", async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("server with both successful and errored calls lands in 'active' (priority over hallucinated)", async () => {
+  const dir = makeClaudeWith({
+    mcpServers: { mixed: { command: "x" } },
+    sessions: [
+      {
+        projectKey: "p1",
+        events: [
+          event([
+            { type: "tool_use", id: "tu_1", name: "mcp__mixed__do_real", input: {} },
+          ]),
+          event([
+            { type: "tool_use", id: "tu_2", name: "mcp__mixed__do_fake", input: {} },
+          ]),
+          event([
+            { type: "tool_result", tool_use_id: "tu_2", is_error: true, content: "InputValidationError" },
+          ]),
+        ],
+      },
+    ],
+  });
+  try {
+    const report = await runAudit({ claudeDir: dir, windowDays: 30 });
+    const mixed = report.rows.find((r) => r.name === "mixed")!;
+    assert.equal(mixed.bucket, "active", "active wins over hallucinated when both are present");
+    assert.equal(mixed.successfulCalls, 1);
+    assert.equal(mixed.erroredCalls, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

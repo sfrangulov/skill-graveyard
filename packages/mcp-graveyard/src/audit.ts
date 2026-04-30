@@ -13,10 +13,7 @@ export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
   const allCalls: McpToolCall[] = [];
   for (const sf of sessionFiles) {
     const calls = await parseMcpSession(sf.filepath, sf.projectKey);
-    for (const c of calls) {
-      if (c.timestamp && Date.parse(c.timestamp) < since) continue;
-      allCalls.push(c);
-    }
+    allCalls.push(...calls);
   }
   const summaries = aggregate(servers, allCalls);
   const filtered = opts.only ? summaries.filter((s) => s.bucket === opts.only) : summaries;
@@ -51,7 +48,7 @@ function aggregate(servers: McpServerEntry[], calls: McpToolCall[]): McpServerSu
     const errorCalls = serverCalls.filter((c) => c.errored);
     const toolsInvoked = [...new Set(successCalls.map((c) => c.tool))].sort();
     const toolsErrored = [...new Set(errorCalls.map((c) => c.tool))].sort();
-    const toolsAdvertised = new Set(serverCalls.map((c) => c.tool)).size;
+    const toolsSeen = new Set(serverCalls.map((c) => c.tool)).size;
     const lastCall = serverCalls
       .map((c) => c.timestamp)
       .filter((t): t is string => t !== null)
@@ -68,7 +65,7 @@ function aggregate(servers: McpServerEntry[], calls: McpToolCall[]): McpServerSu
       name,
       configured: !!cfg,
       configuredIn: cfg?.configuredIn ?? null,
-      toolsAdvertised,
+      toolsSeen,
       toolsInvoked,
       toolsErrored,
       totalCalls: serverCalls.length,
