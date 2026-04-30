@@ -79,6 +79,7 @@ function die(msg: string): never {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.subcommand === "prune") {
+    if (args.apply) ensureClaudeCliAvailable();
     const report = await runAudit({
       claudeDir: args.claudeDir,
       windowDays: args.days,
@@ -88,7 +89,6 @@ async function main() {
       console.log(formatPruneReport(plan, args.days, { color: process.stdout.isTTY ?? false }));
       return;
     }
-    ensureClaudeCliAvailable();
     const claudeJsonPath = join(dirname(report.claudeDir), ".claude.json");
     const allEntries = await readMcpServers(claudeJsonPath);
     const entries = plan

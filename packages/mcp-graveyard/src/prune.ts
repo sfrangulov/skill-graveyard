@@ -44,7 +44,7 @@ export async function writePruneBackup(
     ),
     restoreHint: "claude mcp add <name> <command> [args...] (consult JSON above for args/env)",
   };
-  await writeFile(tmpPath, JSON.stringify(contents, null, 2), { mode: 0o600 });
+  await writeFile(tmpPath, JSON.stringify(contents, null, 2), { mode: 0o600, flag: "wx" });
   await chmod(tmpPath, 0o600);
   await rename(tmpPath, finalPath);
   return finalPath;
