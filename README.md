@@ -7,7 +7,7 @@
 
 Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)
 
-[![demo](docs/demo.gif)](https://asciinema.org/a/JFgkjIF1emExXjQe)
+[![demo](https://raw.githubusercontent.com/sfrangulov/skill-graveyard/main/docs/demo.gif)](https://asciinema.org/a/JFgkjIF1emExXjQe)
 
 Audit which Claude Code skills you actually use. Parses your local session logs and sorts every skill name that appears into one of four buckets:
 

@@ -2,6 +2,12 @@
 
 All notable changes to skill-graveyard. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## 0.8.1 — 2026-04-30
+
+### Fixed
+
+- README demo gif now uses an absolute GitHub raw URL. The relative `docs/demo.gif` reference rendered broken on npmjs.com because the published tarball doesn't include `docs/`.
+
 ## 0.8.0 — 2026-04-30
 
 ### Changed
