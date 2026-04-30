@@ -11,14 +11,7 @@
     },
     "packages/skill-graveyard": {
       "package-name": "skill-graveyard",
-      "component": "skill-graveyard",
-      "extra-files": [
-        {
-          "type": "json",
-          "path": "../../.claude-plugin/plugin.json",
-          "jsonpath": "$.version"
-        }
-      ]
+      "component": "skill-graveyard"
     },
     "packages/mcp-graveyard": {
       "package-name": "mcp-graveyard",

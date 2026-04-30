@@ -75,6 +75,7 @@ Things to know:
 - `bin` path in each package must be `dist/cli.js` — **no `./` prefix**. With `./`, npm strips the entire `bin` entry from the published tarball with only a warning. `npm pkg fix` normalizes this.
 - For `skill-graveyard`, the prepack/postpack scripts copy `.claude-plugin/`, `commands/`, `README.md`, `LICENSE` from repo root into the package dir at pack time. The publish workflow already invokes this. If `npm pack` errors mid-way during local debugging, `postpack` does NOT run — manually clean with `rm -rf packages/skill-graveyard/{.claude-plugin,commands,README.md,LICENSE}` if `git status` is dirty.
 - `mcp-graveyard` keeps its plugin assets INSIDE the package, no prepack hack.
+- **Skill-graveyard plugin version is NOT auto-synced.** The root `.claude-plugin/plugin.json` `version` field must be bumped by hand when bumping `packages/skill-graveyard/package.json`. Release-please used to sync via `extra-files` with a `../../` path, but release-please-action v4 rejects parent-directory traversal in `extra-files` paths ("illegal pathing characters"). Removed the broken config in skill-graveyard@0.9.0; durable fix (move `.claude-plugin/` and `commands/` from root into `packages/skill-graveyard/`) is a deferred follow-up.
 - `@skill-graveyard/core` has no plugin.json and no GitHub release per release-please config — internal-facing only.
 
 ### Manual fallback (emergency only)
