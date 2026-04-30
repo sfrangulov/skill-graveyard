@@ -19,6 +19,8 @@ This is an npm workspaces monorepo:
 - `packages/skill-graveyard/` — published as `skill-graveyard`. CLI, all subcommand implementations (`audit`, `prune`, `suggest`, `projects`, `cost`, `outdated`), `format.ts`.
 - `packages/mcp-graveyard/` — published as `mcp-graveyard`. CLI for auditing MCP server tool usage. Mirrors skill-graveyard's bucket model (active/dead/missing/hallucinated) but for MCP servers. Plugin assets (`.claude-plugin/`, `commands/`) live INSIDE the package — no prepack/postpack copy hack.
 - `.claude-plugin/`, `commands/` — plugin assets at repo root. Pulled into the `skill-graveyard` tarball at pack time via `prepack`/`postpack` scripts in `packages/skill-graveyard/package.json` (which copy them into the package dir before pack and remove them after).
+- `release-please-config.json`, `.release-please-manifest.json` — release-please configuration (per-package settings, current version baseline). See the Release section below.
+- `.github/workflows/release-please.yml` — automated release workflow (open Release PR on push to main, publish + tag + GH release on PR merge).
 - `docs/` — Pages site (`docs/index.html`) and design specs (`docs/specs/`).
 
 Inside each package:
@@ -58,15 +60,31 @@ These look like missing features. Verify with the user before "fixing":
 
 ## Release
 
-### npm publish
+### Automated via release-please
 
-Two packages publish independently. Order: when both need releasing, **publish `@skill-graveyard/core` first**, then `skill-graveyard` (so its `^0.1.0` core dep resolves on the registry).
+**Do not run `npm publish`, `git tag`, or `gh release create` manually.** All three packages release through [release-please](https://github.com/googleapis/release-please), configured in `release-please-config.json` + `.release-please-manifest.json` and driven by `.github/workflows/release-please.yml`. Manual workflows compete with the bot and create version drift.
 
-1. Bump `version` in lock-step within each package: `packages/<name>/package.json` and (for `skill-graveyard`) `.claude-plugin/plugin.json` must match.
-2. `npm pack --workspace=<name> --dry-run` first. For `skill-graveyard`, confirm the tarball contains `dist/`, `README.md`, `LICENSE`, `.claude-plugin/`, `commands/`. The `prepack` script handles the parent-dir asset copy; if `npm pack` errors mid-way, `postpack` does NOT run — manually clean with `rm -rf packages/skill-graveyard/{.claude-plugin,commands,README.md,LICENSE}` if `git status` is dirty.
-3. `bin` path in `packages/skill-graveyard/package.json` must be `dist/cli.js` — **no `./` prefix**. With `./`, npm strips the entire `bin` entry from the published tarball with only a warning. `npm pkg fix` will normalize this.
-4. `npm publish --workspace=<name>` runs that workspace's `prepublishOnly` automatically. Requires an OTP from an authenticator app — ask the user to run `! npm publish --workspace=<name> --otp=NNNNNN` so the result lands in the conversation.
-5. After publish: `git tag -a <name>@vX.Y.Z`, push the tag, then `gh release create <name>@vX.Y.Z` with release notes (skill-graveyard only — core releases are internal-facing, no GitHub release).
+How it works:
+
+1. Author commits with **conventional-commit prefixes** when the change should ship as a release: `fix:` (patch), `feat:` (minor), `feat!:` or `BREAKING CHANGE:` in body (major). `chore:`/`docs:`/`refactor:`/`test:`/`ci:` show in CHANGELOG history but don't bump versions. Bare imperative subjects without a prefix are fine for non-release changes.
+2. On push to `main`, the release-please action either opens or updates a "Release PR" listing the queued bumps for any package with releasable commits. The PR auto-syncs `.claude-plugin/plugin.json` files via `extra-files` config — never edit those by hand.
+3. Merging the Release PR triggers the publish job: tags (`<component>@vX.Y.Z`), GitHub releases, and conditional `npm publish` per package. Uses `NPM_TOKEN` automation token, no OTP. Core publishes first if its release was created.
+
+Things to know:
+
+- `bin` path in each package must be `dist/cli.js` — **no `./` prefix**. With `./`, npm strips the entire `bin` entry from the published tarball with only a warning. `npm pkg fix` normalizes this.
+- For `skill-graveyard`, the prepack/postpack scripts copy `.claude-plugin/`, `commands/`, `README.md`, `LICENSE` from repo root into the package dir at pack time. The publish workflow already invokes this. If `npm pack` errors mid-way during local debugging, `postpack` does NOT run — manually clean with `rm -rf packages/skill-graveyard/{.claude-plugin,commands,README.md,LICENSE}` if `git status` is dirty.
+- `mcp-graveyard` keeps its plugin assets INSIDE the package, no prepack hack.
+- `@skill-graveyard/core` has no plugin.json and no GitHub release per release-please config — internal-facing only.
+
+### Manual fallback (emergency only)
+
+Use only if release-please is blocked and a release is urgent:
+
+1. Bump `version` in `packages/<name>/package.json` and (for skill-graveyard) `.claude-plugin/plugin.json` lockstep.
+2. `npm publish --workspace=<name>` with an interactive OTP — ask the user to run `! npm publish --workspace=<name> --otp=NNNNNN` so the result lands in the conversation.
+3. `git tag -a <component>@vX.Y.Z` and push.
+4. release-please will resync its state on the next push.
 
 ### Docs site
 
