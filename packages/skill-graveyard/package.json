@@ -1,0 +1,50 @@
+{
+  "name": "skill-graveyard",
+  "version": "0.7.0",
+  "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
+  "type": "module",
+  "bin": {
+    "skill-graveyard": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    ".claude-plugin",
+    "commands"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "prepack": "cp -r ../../.claude-plugin ../../commands .",
+    "postpack": "rm -rf .claude-plugin commands",
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "postbuild": "chmod +x dist/cli.js",
+    "prepublishOnly": "npm -w skill-graveyard run typecheck && npm -w skill-graveyard run test && npm -w skill-graveyard run build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sfrangulov/skill-graveyard.git",
+    "directory": "packages/skill-graveyard"
+  },
+  "bugs": {
+    "url": "https://github.com/sfrangulov/skill-graveyard/issues"
+  },
+  "homepage": "https://sfrangulov.github.io/skill-graveyard/",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "skills",
+    "audit",
+    "cli",
+    "anthropic"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "gpt-tokenizer": "^3.4.0"
+  }
+}
