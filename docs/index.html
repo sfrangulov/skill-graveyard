@@ -414,7 +414,7 @@ footer a:hover{color:var(--accent);border-bottom-color:var(--accent-soft)}
 <div class="wrap">
 
   <div class="topline">
-    <span>skill-graveyard / 0.8.0</span>
+    <span>skill-graveyard / 0.8.0 · mcp-graveyard / 0.1.0</span>
     <span class="right">
       <a href="https://github.com/sfrangulov/skill-graveyard">github ↗</a>
       <a href="https://www.npmjs.com/package/skill-graveyard">npm ↗</a>
@@ -766,6 +766,60 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
     </div>
   </section>
 
+  <!-- ── 06 ───────────────────────────────────── -->
+  <section class="reveal" id="companion">
+    <p class="section-head"><span class="num">06</span> companion</p>
+    <h2>Same parser, different graveyard.</h2>
+
+    <p class="lead">A single MCP server can advertise 50 tools — full JSON schemas — adding hundreds of tokens to every API request whether or not Claude calls them. mcp-graveyard surfaces the same dual signal as skill-graveyard: dead servers (configured in <code>~/.claude.json</code>, never invoked) and hallucinated calls (<code>InputValidationError</code> on tool names that don't exist on the connected server).</p>
+
+    <div class="install">
+      <div class="path">
+        <span class="label">one-off</span>
+        <p class="desc">Same install pattern as skill-graveyard.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx mcp-graveyard</span><button data-copy="npx mcp-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">global cli</span>
+        <p class="desc">Installs the binary on your <code>PATH</code>.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npm i -g mcp-graveyard</span><button data-copy="npm i -g mcp-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">claude code plugin</span>
+        <p class="desc">Adds the <code>/audit-mcp-tools</code> slash command (via plugin registry).</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">claude /plugin install mcp-graveyard</span><button data-copy="claude /plugin install mcp-graveyard" type="button">copy</button></div>
+      </div>
+    </div>
+
+    <div class="terminal">
+      <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ mcp-graveyard --days 30</span></div>
+<pre><span class="h">mcp-graveyard</span> <span class="mt">— 30 days · 8 servers configured · 143 calls · 112 succeeded · 31 errored</span>
+
+<span class="a">ACTIVE (3)</span>  <span class="mt">configured and invoked — keep</span>
+  plugin_supabase_supabase      47 tools, 5 invoked, 89 calls  <i>last 2026-04-28</i>
+  plugin_playwright_playwright   3 tools, 3 invoked, 34 calls  <i>last 2026-04-27</i>
+  plugin_claude-mem_mcp-search   4 tools, 4 invoked, 12 calls  <i>last 2026-04-29</i>
+
+<span class="d">DEAD (3)</span>  <span class="mt">configured, 0 invocations in 30d — removal candidates</span>
+  pencil                        0 tools, 0 invoked, 0 calls   —
+  plugin_figma_figma            0 tools, 0 invoked, 0 calls   —
+  claude_ai_Gmail               0 tools, 0 invoked, 0 calls   —
+
+<span class="y">HALLUCINATED (1)</span>  <span class="mt">tool name returned InputValidationError — server registered but call failed</span>
+  plugin_supabase_supabase       0 tools, 0 invoked, 2 calls  <i>last 2026-04-22</i>
+  <span class="rl">→ mcp-graveyard suggest</span>    <i>for actionable classification</i>
+
+<span class="m">MISSING (1)</span>  <span class="mt">invoked but not found in ~/.claude.json — external registration or stale log</span>
+  old-analytics-server           1 tools, 1 invoked, 3 calls  <i>last 2026-04-16</i>
+  <span class="rl">→ mcp-graveyard suggest</span>    <i>for actionable classification</i>
+
+<span class="rl">→ run: mcp-graveyard prune</span>  <i>to clear DEAD servers</i>
+</pre>
+    </div>
+
+    <p style="margin-top: 2rem;"><a href="https://github.com/sfrangulov/skill-graveyard/blob/main/packages/mcp-graveyard/README.md">Full docs and subcommand reference →</a></p>
+  </section>
+
   <!--
   FEATURED-IN strip — uncomment and fill once mentions land.
   Track sources in /MENTIONS.md, then promote the noteworthy ones here.
@@ -781,7 +835,7 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
   -->
 
   <footer>
-    <span>skill-graveyard 0.8.0 · MIT · 2026</span>
+    <span>skill-graveyard 0.8.0 + mcp-graveyard 0.1.0 · MIT · 2026</span>
     <span>built by <a href="https://github.com/sfrangulov">Sergei Frangulov</a></span>
     <span><a href="https://github.com/sfrangulov/skill-graveyard">github.com/sfrangulov/skill-graveyard</a></span>
   </footer>

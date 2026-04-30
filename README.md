@@ -20,15 +20,22 @@ Same parser, multiple signals: it's not just a graveyard, it's an audit of where
 
 ### Companion tool: mcp-graveyard
 
-The same dual-signal idea applied to MCP server tools: which configured servers
-does Claude actually invoke, and which tool names is it hallucinating?
+The same four-bucket model (active / dead / missing / hallucinated), applied to MCP servers instead of skills. Which configured servers does Claude actually invoke? Which tool names is it hallucinating?
 
 ```sh
 npx mcp-graveyard
 ```
 
-Server-first audit, `prune` with automatic backup, and `projects` /
-`suggest` for finer signals. See [packages/mcp-graveyard](packages/mcp-graveyard/).
+Four subcommands:
+
+- **`audit`** (default) — server-first table sorted by call volume. `--days N`, `--only active|dead|missing|hallucinated`, `--tools` (expand per-server tool breakdown), `--json`.
+- **`prune`** — prints a removal plan. `--apply` writes a 0o600-permissioned backup of `~/.claude.json` then runs `claude mcp remove` for each dead server.
+- **`projects`** — re-aggregates by the `cwd` recorded in your session logs. Surfaces globally-configured servers that only appear in one project — candidates for project-scoping.
+- **`suggest`** — classifies missing and hallucinated tool names into TYPO, TOOL_CONFUSION, and UNCLASSIFIED buckets with recommendations.
+
+Reads `~/.claude.json` (`mcpServers` block) for the configured-server list and `~/.claude/projects/**/*.jsonl` for invocation history. All analysis is local; no network calls.
+
+See [packages/mcp-graveyard/README.md](packages/mcp-graveyard/README.md) for full docs.
 
 ## Why this exists
 
