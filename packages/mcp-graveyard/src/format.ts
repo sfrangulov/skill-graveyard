@@ -1,4 +1,5 @@
 import type { AuditReport, McpServerSummary, McpBucket } from "./types.js";
+import type { PrunePlanEntry } from "./prune.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -112,5 +113,26 @@ export function formatDrillDown(server: string, summary: McpServerSummary, opts:
     // Listing each dead tool name requires keeping per-tool data through the aggregation,
     // which is a Task 8 enhancement.
   }
+  return lines.join("\n");
+}
+
+export function formatPruneReport(
+  plan: PrunePlanEntry[],
+  windowDays: number,
+  opts: FormatOptions,
+): string {
+  const c = (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
+  if (plan.length === 0) {
+    return c(C.dim, `mcp-graveyard prune — nothing to remove (no dead servers in ${windowDays} days)`);
+  }
+  const lines: string[] = [
+    c(C.bold, `mcp-graveyard prune`) +
+      c(C.dim, ` — plan: ${plan.length} server${plan.length === 1 ? "" : "s"} to remove`) +
+      c(C.dim, ` (0 successful calls in ${windowDays} days)`),
+    "",
+    ...plan.map((p) => `  ${p.server.padEnd(40)}  ${p.command}`),
+    "",
+    c(C.dim, `re-run with --apply to execute (backup is automatic)`),
+  ];
   return lines.join("\n");
 }

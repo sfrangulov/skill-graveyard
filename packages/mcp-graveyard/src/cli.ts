@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+import { dirname, join } from "node:path";
 import { runAudit } from "./audit.js";
-import { formatAuditReport, formatAuditJson, formatDrillDown } from "./format.js";
+import { formatAuditReport, formatAuditJson, formatDrillDown, formatPruneReport } from "./format.js";
+import { planPrune, applyPrune, writePruneBackup, ensureClaudeCliAvailable } from "./prune.js";
+import { readMcpServers } from "./mcp_config.js";
 import type { McpBucket } from "./types.js";
 
 const VALID_BUCKETS: McpBucket[] = ["active", "dead", "missing", "hallucinated"];
@@ -75,6 +78,33 @@ function die(msg: string): never {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.subcommand === "prune") {
+    const report = await runAudit({
+      claudeDir: args.claudeDir,
+      windowDays: args.days,
+    });
+    const plan = planPrune(report.rows, args.pruneOnly);
+    if (!args.apply) {
+      console.log(formatPruneReport(plan, args.days, { color: process.stdout.isTTY ?? false }));
+      return;
+    }
+    ensureClaudeCliAvailable();
+    const claudeJsonPath = join(dirname(report.claudeDir), ".claude.json");
+    const allEntries = await readMcpServers(claudeJsonPath);
+    const entries = plan
+      .map((p) => allEntries.find((e) => e.name === p.server))
+      .filter((e): e is NonNullable<typeof e> => e !== undefined);
+    const backupPath = await writePruneBackup(report.claudeDir, entries, args.days);
+    console.log(`backup: ${backupPath}`);
+    const result = applyPrune(plan);
+    console.log(`removed: ${result.removed.length}/${plan.length}`);
+    if (result.failed.length > 0) {
+      console.log(`failed:`);
+      for (const f of result.failed) console.log(`  ${f.server}: ${f.error}`);
+      process.exit(1);
+    }
+    return;
+  }
   if (args.subcommand !== "audit") {
     die(`subcommand "${args.subcommand}" not implemented yet`);
   }
