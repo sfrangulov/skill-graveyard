@@ -64,7 +64,7 @@ function usage(): never {
   console.log(`mcp-graveyard — audit MCP server tool usage
 
 Usage:
-  mcp-graveyard [audit] [--days N] [--only ACTIVE|DEAD|MISSING|HALLUCINATED]
+  mcp-graveyard [audit] [--days N] [--only active|dead|missing|hallucinated]
                        [--tools <server>] [--json] [--claude-dir <path>]
   mcp-graveyard prune [--apply] [--only <server>] [--claude-dir <path>]
   mcp-graveyard projects [--days N] [--claude-dir <path>]
@@ -119,7 +119,8 @@ async function main() {
   if (args.subcommand === "suggest") {
     const rows = await runSuggest({ claudeDir: args.claudeDir, windowDays: args.days });
     if (args.json) {
-      console.log(JSON.stringify(rows, null, 2));
+      const lowercased = rows.map((r) => ({ ...r, category: r.category.toLowerCase() }));
+      console.log(JSON.stringify(lowercased, null, 2));
       return;
     }
     console.log(formatSuggestReport(rows, { color: process.stdout.isTTY ?? false }));

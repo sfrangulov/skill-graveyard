@@ -55,25 +55,20 @@ Sorts every configured server into four buckets and lists per-tool usage for act
 mcp-graveyard — 30 days · 8 servers configured · 143 calls · 112 succeeded · 31 errored
 
 ACTIVE (3)
-  server                                tools   invoked   calls    last
-  plugin_supabase_supabase              47      5         89       2026-04-28
-  plugin_playwright_playwright          25      3         34       2026-04-27
-  plugin_claude-mem_mcp-search          7       4         12       2026-04-29
+  plugin_supabase_supabase     47 tools, 5 invoked, 89 calls  last 2026-04-28
+  plugin_playwright_playwright  3 tools, 3 invoked, 34 calls  last 2026-04-27
+  plugin_claude-mem_mcp-search  4 tools, 4 invoked, 12 calls  last 2026-04-29
 
-DEAD (4) — candidates for removal
-  server                                tools   invoked   calls    config
-  plugin_figma_figma                    9       0         0        ~/.claude.json
-  claude_ai_Gmail                       10      0         0        ~/.claude.json
-  claude_ai_Google_Calendar             6       0         0        ~/.claude.json
-  pencil                                14      0         0        ~/.claude.json
+DEAD (3)
+  pencil                     0 tools, 0 invoked, 0 calls  —
+  plugin_figma_figma         0 tools, 0 invoked, 0 calls  —
+  claude_ai_Gmail            0 tools, 0 invoked, 0 calls  —
 
 HALLUCINATED (1)
-  server                                errors  example
-  plugin_supabase_supabase              2       mcp__supabase__list_tables_extra (InputValidationError)
+  plugin_supabase_supabase  0 tools, 0 invoked, 2 calls  last 2026-04-22
 
-MISSING (1) — invoked successfully but no longer configured
-  server                                calls   first        last
-  old-analytics-server                  3       2026-04-15   2026-04-16
+MISSING (1)
+  old-analytics-server  1 tools, 1 invoked, 3 calls  last 2026-04-16
 
 → run: mcp-graveyard prune  to clear DEAD servers
 ```
@@ -91,12 +86,11 @@ mcp-graveyard --json | jq '.rows[] | select(.category=="dead") | .server'
 Reads the audit and emits a removal plan. Dry-run by default:
 
 ```
-mcp-graveyard prune — plan: 4 servers to remove (0 successful calls in 30 days)
+mcp-graveyard prune — plan: 3 servers to remove (0 successful calls in 30 days)
 
-  plugin_figma_figma                    claude mcp remove plugin_figma_figma
-  claude_ai_Gmail                       claude mcp remove claude_ai_Gmail
-  claude_ai_Google_Calendar             claude mcp remove claude_ai_Google_Calendar
-  pencil                                claude mcp remove pencil
+  pencil                                    claude mcp remove pencil
+  plugin_figma_figma                        claude mcp remove plugin_figma_figma
+  claude_ai_Gmail                           claude mcp remove claude_ai_Gmail
 
 re-run with --apply to execute (backup is automatic)
 ```
@@ -120,14 +114,14 @@ Groups every server invocation by the `cwd` recorded in your session logs. Surfa
 
 ```
 ~/projects/client-analytics  17 ses, 39 calls, 2 servers
-    plugin_supabase_supabase              31×
-    plugin_claude-mem_mcp-search           8×
+    plugin_supabase_supabase    31×
+    plugin_claude-mem_mcp-search 8×
 
 ~/projects/clientco/web-platform  2 ses, 2 calls, 1 server
-  ✗ plugin_supabase_supabase              2× (errored)
+  ✗ plugin_supabase_supabase  2× (2 hallucinated)
 ```
 
-`✗` marks errored calls.
+`✗` marks servers with hallucinated tool names (input validation errors). The `(N hallucinated)` tag distinguishes these from runtime errors, which are filtered out at parse time.
 
 ## What it reads
 

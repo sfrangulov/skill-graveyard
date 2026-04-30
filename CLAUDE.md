@@ -74,7 +74,7 @@ The Pages site (<https://sfrangulov.github.io/skill-graveyard/>) deploys automat
 
 ### CI
 
-`.github/workflows/ci.yml` runs `typecheck`, `test`, `build` per workspace via a 4-cell matrix: `{@skill-graveyard/core, skill-graveyard} × {Node 20, Node 22}`. **`fail-fast: false`** — one cell's failure does not cancel the others. Before skill-graveyard's typecheck/test/build runs, a conditional step builds `@skill-graveyard/core` first (skill-graveyard imports types from `packages/core/dist/`).
+`.github/workflows/ci.yml` runs `typecheck`, `test`, `build` per workspace via a 6-cell matrix: `{@skill-graveyard/core, skill-graveyard, mcp-graveyard} × {Node 20, Node 22}`. **`fail-fast: false`** — one cell's failure does not cancel the others. Before skill-graveyard's typecheck/test/build runs, a conditional step builds `@skill-graveyard/core` first (skill-graveyard imports types from `packages/core/dist/`).
 
 ## Conventions
 
