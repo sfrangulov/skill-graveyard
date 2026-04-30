@@ -1,0 +1,31 @@
+{
+  "name": "@skill-graveyard/core",
+  "version": "0.1.0",
+  "description": "Internal building blocks for the skill-graveyard / mcp-graveyard CLIs. No semver-stability promise.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sfrangulov/skill-graveyard.git",
+    "directory": "packages/core"
+  },
+  "license": "MIT"
+}
