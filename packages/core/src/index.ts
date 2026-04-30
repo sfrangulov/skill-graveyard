@@ -12,5 +12,5 @@ export {
 } from "./discovery.js";
 export type { SkillSource, InstalledSkill } from "./discovery.js";
 
-export { findSessionFiles, parseSession } from "./parser.js";
-export type { SkillCall } from "./parser.js";
+export { findSessionFiles, parseSession, parseToolCalls } from "./parser.js";
+export type { SkillCall, ToolCallBase, ToolUseItem } from "./parser.js";

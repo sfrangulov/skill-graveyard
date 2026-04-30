@@ -3,8 +3,7 @@ import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
-export interface SkillCall {
-  skill: string;
+export interface ToolCallBase {
   sessionId: string;
   projectKey: string;
   filepath: string;
@@ -15,7 +14,17 @@ export interface SkillCall {
   errorReason: string | null;
 }
 
-const SKILL_TOKEN = '"name":"Skill"';
+export interface ToolUseItem {
+  type: "tool_use";
+  id?: string;
+  name?: string;
+  input?: unknown;
+}
+
+export interface SkillCall extends ToolCallBase {
+  skill: string;
+}
+
 const RESULT_TOKEN = '"type":"tool_result"';
 const ERROR_PATTERNS =
   /InputValidationError|skill not found|does not exist|unknown skill|cannot find skill|not a known skill/i;
@@ -54,23 +63,32 @@ export async function findSessionFiles(
   return out;
 }
 
-export async function parseSession(
+// New generic entry point. Streams the session JSONL once, applies `predicate`
+// to each tool_use item, calls `build` to construct the typed call (or returns
+// null to skip). Correlates tool_results back to calls via toolUseId, mutating
+// `errored`/`errorReason` on the typed call when an error result arrives.
+export async function parseToolCalls<T extends ToolCallBase>(
   filepath: string,
   projectKey: string,
-): Promise<SkillCall[]> {
+  predicate: (item: ToolUseItem) => boolean,
+  build: (item: ToolUseItem, base: ToolCallBase) => T | null,
+): Promise<T[]> {
   const stream = createReadStream(filepath, { encoding: "utf8" });
   const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
-  const calls: SkillCall[] = [];
-  const pending = new Map<string, SkillCall>();
+  const calls: T[] = [];
+  const pending = new Map<string, T>();
   let lastCwd: string | null = null;
 
   for await (const line of rl) {
     if (!line) continue;
-    const hasSkill = line.includes(SKILL_TOKEN);
     const hasResult = line.includes(RESULT_TOKEN);
     const needCwd = lastCwd === null && line.includes('"cwd":"');
-    if (!hasSkill && !hasResult && !needCwd) continue;
+    // We must parse any line that could contain tool_use, tool_result, or cwd.
+    // Since we don't know the tool name token ahead of time (it's caller-supplied),
+    // we check for tool_use generically.
+    const hasToolUse = line.includes('"type":"tool_use"');
+    if (!hasToolUse && !hasResult && !needCwd) continue;
 
     let obj: unknown;
     try {
@@ -81,7 +99,7 @@ export async function parseSession(
     if (!isObject(obj)) continue;
 
     if (typeof obj.cwd === "string") lastCwd = obj.cwd;
-    if (!hasSkill && !hasResult) continue;
+    if (!hasToolUse && !hasResult) continue;
 
     const message = obj.message;
     if (!isObject(message)) continue;
@@ -96,24 +114,25 @@ export async function parseSession(
     for (const item of content) {
       if (!isObject(item)) continue;
 
-      if (item.type === "tool_use" && item.name === "Skill") {
-        const input = item.input;
-        const skill = isObject(input) && typeof input.skill === "string" ? input.skill : null;
-        if (!skill) continue;
-        const toolUseId = typeof item.id === "string" ? item.id : "";
-        const call: SkillCall = {
-          skill,
-          sessionId,
-          projectKey,
-          filepath,
-          cwd: lastCwd,
-          timestamp,
-          toolUseId,
-          errored: false,
-          errorReason: null,
-        };
-        calls.push(call);
-        if (toolUseId) pending.set(toolUseId, call);
+      if (item.type === "tool_use") {
+        const toolUseItem = item as unknown as ToolUseItem;
+        if (predicate(toolUseItem)) {
+          const toolUseId = typeof item.id === "string" ? item.id : "";
+          const base: ToolCallBase = {
+            sessionId,
+            projectKey,
+            filepath,
+            cwd: lastCwd,
+            timestamp,
+            toolUseId,
+            errored: false,
+            errorReason: null,
+          };
+          const built = build(toolUseItem, base);
+          if (!built) continue;
+          calls.push(built);
+          if (toolUseId) pending.set(toolUseId, built);
+        }
       } else if (item.type === "tool_result") {
         const tid = typeof item.tool_use_id === "string" ? item.tool_use_id : null;
         if (!tid) continue;
@@ -132,6 +151,26 @@ export async function parseSession(
   }
 
   return calls;
+}
+
+// Backward-compat thin adapter for skill-graveyard. Keeps the same exported signature
+// it had pre-refactor, so skill-graveyard's callers don't need to change.
+export async function parseSession(
+  filepath: string,
+  projectKey: string,
+): Promise<SkillCall[]> {
+  return parseToolCalls<SkillCall>(
+    filepath,
+    projectKey,
+    (item) => item.type === "tool_use" && item.name === "Skill",
+    (item, base) => {
+      const input = item.input;
+      const skill =
+        isObject(input) && typeof input.skill === "string" ? input.skill : null;
+      if (!skill) return null;
+      return { ...base, skill };
+    },
+  );
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {

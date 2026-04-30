@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseSession } from "./parser.js";
+import { parseSession, parseToolCalls } from "./parser.js";
+import type { ToolCallBase } from "./parser.js";
 
 function makeSession(events: unknown[]): string {
   const dir = mkdtempSync(join(tmpdir(), "skill-graveyard-test-"));
@@ -261,4 +262,77 @@ test("handles array content with text objects in tool_result", async () => {
 
   assert.equal(calls[0]!.errored, true);
   assert.match(calls[0]!.errorReason ?? "", /InputValidationError/);
+});
+
+interface MockCall extends ToolCallBase {
+  rawName: string;
+  argA: string | null;
+}
+
+test("parseToolCalls applies predicate + builder generically", async () => {
+  const fp = makeSession([
+    event({
+      content: [
+        { type: "tool_use", id: "tu_1", name: "MockTool", input: { argA: "value" } },
+        { type: "tool_use", id: "tu_2", name: "Skill", input: { skill: "x" } }, // not matched
+      ],
+    }),
+  ]);
+
+  const calls = await parseToolCalls<MockCall>(
+    fp,
+    "proj",
+    (item) => item.type === "tool_use" && item.name === "MockTool",
+    (item, base) => ({
+      ...base,
+      rawName: typeof item.name === "string" ? item.name : "",
+      argA:
+        typeof (item.input as { argA?: unknown })?.argA === "string"
+          ? (item.input as { argA: string }).argA
+          : null,
+    }),
+  );
+
+  rmSync(fp, { recursive: true, force: true });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.rawName, "MockTool");
+  assert.equal(calls[0]!.argA, "value");
+  assert.equal(calls[0]!.errored, false);
+});
+
+test("parseToolCalls correlates tool_result errors back to the call", async () => {
+  const fp = makeSession([
+    event({
+      content: [
+        { type: "tool_use", id: "tu_1", name: "MockTool", input: {} },
+      ],
+    }),
+    event({
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "tu_1",
+          is_error: true,
+          content: "InputValidationError: thing",
+        },
+      ],
+    }),
+  ]);
+
+  const calls = await parseToolCalls<MockCall>(
+    fp,
+    "proj",
+    (item) => item.type === "tool_use" && item.name === "MockTool",
+    (item, base) => ({
+      ...base,
+      rawName: typeof item.name === "string" ? item.name : "",
+      argA: null,
+    }),
+  );
+
+  rmSync(fp, { recursive: true, force: true });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]!.errored, true);
 });
