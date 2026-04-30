@@ -1,52 +1,22 @@
 {
-  "name": "skill-graveyard",
-  "version": "0.7.0",
-  "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
+  "name": "skill-graveyard-monorepo",
+  "private": true,
+  "version": "0.0.0",
   "type": "module",
-  "bin": {
-    "skill-graveyard": "dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE",
-    ".claude-plugin",
-    "commands"
+  "workspaces": [
+    "packages/*"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "dev": "tsx src/cli.ts",
-    "build": "tsc",
-    "postbuild": "chmod +x dist/cli.js",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
-    "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/*.test.ts"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sfrangulov/skill-graveyard.git"
-  },
-  "bugs": {
-    "url": "https://github.com/sfrangulov/skill-graveyard/issues"
-  },
-  "homepage": "https://sfrangulov.github.io/skill-graveyard/",
-  "keywords": [
-    "claude-code",
-    "claude",
-    "skills",
-    "audit",
-    "cli",
-    "anthropic"
-  ],
-  "license": "MIT",
   "devDependencies": {
     "@types/node": "^24.12.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3"
-  },
-  "dependencies": {
-    "gpt-tokenizer": "^3.4.0"
   }
 }
