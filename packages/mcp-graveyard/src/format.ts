@@ -24,8 +24,8 @@ export function formatAuditJson(report: AuditReport): string {
         configured: r.configured,
         configuredIn: r.configuredIn,
         toolsSeen: r.toolsSeen,
-        toolsInvoked: r.toolsInvoked.length,
-        toolsErrored: r.toolsErrored.length,
+        toolsInvoked: r.toolsInvoked,
+        toolsErrored: r.toolsErrored,
         totalCalls: r.totalCalls,
         successfulCalls: r.successfulCalls,
         erroredCalls: r.erroredCalls,
@@ -60,13 +60,16 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
     byBucket.get(row.bucket)!.push(row);
   }
 
-  const bucketOrder: McpBucket[] = ["active", "dead", "hallucinated", "missing"];
+  const bucketOrder: McpBucket[] = ["active", "dead", "missing", "hallucinated"];
   for (const bucket of bucketOrder) {
     const rows = byBucket.get(bucket) ?? [];
     if (rows.length === 0) continue;
     lines.push(c(C.bold, `${bucket.toUpperCase()} (${rows.length})`));
-    for (const row of rows) {
-      lines.push(formatRow(row, opts));
+    const nameW = Math.max(...rows.map((r) => r.name.length));
+    const statsList = rows.map((r) => `${r.toolsSeen} tools, ${r.toolsInvoked.length} invoked, ${r.totalCalls} calls`);
+    const statsW = Math.max(...statsList.map((s) => s.length));
+    for (let i = 0; i < rows.length; i++) {
+      lines.push(formatRow(rows[i]!, statsList[i]!, opts, nameW, statsW));
     }
     lines.push("");
   }
@@ -78,12 +81,11 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
   return lines.join("\n");
 }
 
-function formatRow(row: McpServerSummary, opts: FormatOptions): string {
+function formatRow(row: McpServerSummary, stats: string, opts: FormatOptions, nameW: number, statsW: number): string {
   const c = (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
-  const name = row.name.padEnd(40);
-  const stats = `${row.toolsSeen} tools, ${row.toolsInvoked.length} invoked, ${row.totalCalls} calls`;
+  const name = row.name.padEnd(nameW);
   const last = row.lastCallAt ? c(C.gray, `last ${row.lastCallAt.slice(0, 10)}`) : c(C.gray, "—");
-  return `  ${name}${stats.padEnd(36)}${last}`;
+  return `  ${name}  ${stats.padEnd(statsW)}  ${last}`;
 }
 
 export function formatDrillDown(server: string, summary: McpServerSummary, opts: FormatOptions): string {
@@ -97,10 +99,15 @@ export function formatDrillDown(server: string, summary: McpServerSummary, opts:
   );
   for (const t of summary.toolsInvoked) lines.push(`  ${t}`);
   lines.push("");
-  const dead = summary.toolsSeen - summary.toolsInvoked.length;
-  if (dead > 0) {
-    lines.push(c(C.bold, `DEAD TOOLS (${dead})`));
-    lines.push(c(C.dim, "  (advertised in sessions but never successfully invoked)"));
+  const unsuccessful = summary.toolsSeen - summary.toolsInvoked.length;
+  if (unsuccessful > 0) {
+    if (summary.bucket === "hallucinated") {
+      lines.push(c(C.bold, `HALLUCINATED TOOLS (${unsuccessful})`));
+      lines.push(c(C.dim, "  (invoked but consistently errored — these tool names don't exist on a real server)"));
+    } else {
+      lines.push(c(C.bold, `DEAD TOOLS (${unsuccessful})`));
+      lines.push(c(C.dim, "  (advertised in sessions but never successfully invoked)"));
+    }
     // We don't have the full advertised list at this layer — for v1 we surface counts only.
     // Listing each dead tool name requires keeping per-tool data through the aggregation,
     // which is a Task 8 enhancement.
