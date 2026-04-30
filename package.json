@@ -9,11 +9,6 @@
   "engines": {
     "node": ">=18"
   },
-  "scripts": {
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present"
-  },
   "devDependencies": {
     "@types/node": "^24.12.2",
     "tsx": "^4.21.0",
