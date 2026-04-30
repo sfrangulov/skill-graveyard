@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { classifyAudit, levenshtein } from "./suggest.js";
 import type { AuditReport, AuditRow } from "./audit.js";
-import type { InstalledSkill } from "./discovery.js";
+import type { InstalledSkill } from "@skill-graveyard/core";
 
 function makeRow(opts: {
   invokeName: string;

@@ -45,6 +45,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "gpt-tokenizer": "^3.4.0"
+    "@skill-graveyard/core": "^0.1.0"
   }
 }

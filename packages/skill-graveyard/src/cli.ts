@@ -13,7 +13,7 @@ import {
   formatSuggestReport,
 } from "./format.js";
 import { runOutdated } from "./outdated.js";
-import { resolveClaudePaths } from "./paths.js";
+import { resolveClaudePaths } from "@skill-graveyard/core";
 import { runPrune, type PruneSourceFilter } from "./prune.js";
 import { runProjects } from "./projects.js";
 import { runSuggest } from "./suggest.js";

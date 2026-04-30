@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { computePruneActions, runPrune } from "./prune.js";
 import type { AuditReport, AuditRow, PluginGroup } from "./audit.js";
-import type { InstalledSkill } from "./discovery.js";
+import type { InstalledSkill } from "@skill-graveyard/core";
 
 function makeRow(opts: {
   invokeName: string;

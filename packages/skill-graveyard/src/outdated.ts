@@ -3,9 +3,12 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { Cache } from "./cache.js";
-import { discoverInstalledSkills, findGitRoot } from "./discovery.js";
+import {
+  discoverInstalledSkills,
+  findGitRoot,
+  resolveClaudePaths,
+} from "@skill-graveyard/core";
 import { type Fetcher, realFetcher } from "./fetcher.js";
-import { resolveClaudePaths } from "./paths.js";
 import { classifyMarketplaceEntry, type MarketplaceEntry } from "./source_resolver.js";
 
 export interface PluginSource {

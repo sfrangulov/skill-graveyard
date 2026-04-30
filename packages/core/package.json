@@ -27,5 +27,8 @@
     "url": "git+https://github.com/sfrangulov/skill-graveyard.git",
     "directory": "packages/core"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "gpt-tokenizer": "^3.4.0"
+  }
 }

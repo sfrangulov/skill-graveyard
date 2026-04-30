@@ -6,8 +6,9 @@ import {
 import {
   discoverInstalledSkills,
   type InstalledSkill,
-} from "./discovery.js";
-import { resolveClaudePaths, type ClaudePaths } from "./paths.js";
+  resolveClaudePaths,
+  type ClaudePaths,
+} from "@skill-graveyard/core";
 
 export interface AuditOptions {
   days: number;

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { runAudit, type AuditReport, type AuditRow } from "./audit.js";
-import { isKnownTool } from "./known_tools.js";
+import { isKnownTool } from "@skill-graveyard/core";
 
 export type SuggestBucket =
   | "tool_confusion"
