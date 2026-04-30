@@ -414,7 +414,7 @@ footer a:hover{color:var(--accent);border-bottom-color:var(--accent-soft)}
 <div class="wrap">
 
   <div class="topline">
-    <span>skill-graveyard / 0.8.0 · mcp-graveyard / 0.1.0</span>
+    <span>skill-graveyard / <span class="ver" data-pkg="skill-graveyard">…</span> · mcp-graveyard / <span class="ver" data-pkg="mcp-graveyard">…</span></span>
     <span class="right">
       <a href="https://github.com/sfrangulov/skill-graveyard">github ↗</a>
       <a href="https://www.npmjs.com/package/skill-graveyard">npm ↗</a>
@@ -907,7 +907,7 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
   -->
 
   <footer>
-    <span>skill-graveyard 0.8.0 + mcp-graveyard 0.1.0 · MIT · 2026</span>
+    <span>skill-graveyard <span class="ver" data-pkg="skill-graveyard">…</span> + mcp-graveyard <span class="ver" data-pkg="mcp-graveyard">…</span> · MIT · 2026</span>
     <span>built by <a href="https://github.com/sfrangulov">Sergei Frangulov</a></span>
     <span><a href="https://github.com/sfrangulov/skill-graveyard">github.com/sfrangulov/skill-graveyard</a></span>
   </footer>
@@ -935,6 +935,18 @@ const io=new IntersectionObserver((entries)=>{
   }
 },{rootMargin:'-40px 0px',threshold:0.04});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+
+<script>
+  // Pull live npm versions for header/footer labels. Best-effort: leaves "…" placeholder on failure.
+  document.querySelectorAll('.ver[data-pkg]').forEach((el) => {
+    const pkg = el.getAttribute('data-pkg');
+    if (!pkg) return;
+    fetch('https://registry.npmjs.org/' + encodeURIComponent(pkg) + '/latest', { cache: 'force-cache' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && typeof d.version === 'string') el.textContent = d.version; })
+      .catch(() => { /* leave placeholder */ });
+  });
 </script>
 
 </body>

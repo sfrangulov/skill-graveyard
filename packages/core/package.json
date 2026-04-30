@@ -1,6 +1,6 @@
 {
   "name": "@skill-graveyard/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Internal building blocks for the skill-graveyard / mcp-graveyard CLIs. No semver-stability promise.",
   "type": "module",
   "main": "dist/index.js",
@@ -12,7 +12,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "engines": {
     "node": ">=18"
