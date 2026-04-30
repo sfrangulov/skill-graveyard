@@ -1,0 +1,31 @@
+{
+  "name": "mcp-graveyard",
+  "version": "0.1.0",
+  "description": "Audit which MCP server tools your Claude Code sessions actually invoke. Server-first, surfaces dead servers and hallucinated calls.",
+  "type": "module",
+  "bin": {
+    "mcp-graveyard": "dist/cli.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "postbuild": "chmod +x dist/cli.js",
+    "prepublishOnly": "npm -w mcp-graveyard run typecheck && npm -w mcp-graveyard run test && npm -w mcp-graveyard run build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/*.test.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sfrangulov/skill-graveyard.git",
+    "directory": "packages/mcp-graveyard"
+  },
+  "bugs": { "url": "https://github.com/sfrangulov/skill-graveyard/issues" },
+  "homepage": "https://sfrangulov.github.io/skill-graveyard/",
+  "keywords": ["claude-code", "claude", "mcp", "audit", "cli", "anthropic"],
+  "license": "MIT",
+  "dependencies": {
+    "@skill-graveyard/core": "^0.1.0"
+  }
+}
