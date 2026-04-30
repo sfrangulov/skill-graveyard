@@ -87,11 +87,6 @@ export function computePruneActions(
   filter?: PruneSourceFilter,
 ): PruneAction[] {
   const out: PruneAction[] = [];
-  const rollupKeys = new Set(
-    audit.pluginGroups
-      .filter((g) => g.rollupCandidate)
-      .map(pluginGroupKey),
-  );
 
   for (const row of audit.rows) {
     if (row.category !== "dead") continue;

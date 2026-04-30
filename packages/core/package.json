@@ -20,7 +20,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/*.test.ts"
+    "test": "node --import tsx --test src/*.test.ts",
+    "prepublishOnly": "npm -w @skill-graveyard/core run typecheck && npm -w @skill-graveyard/core run test && npm -w @skill-graveyard/core run build"
   },
   "repository": {
     "type": "git",

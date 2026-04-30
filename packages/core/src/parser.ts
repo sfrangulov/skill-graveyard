@@ -63,10 +63,16 @@ export async function findSessionFiles(
   return out;
 }
 
-// New generic entry point. Streams the session JSONL once, applies `predicate`
-// to each tool_use item, calls `build` to construct the typed call (or returns
-// null to skip). Correlates tool_results back to calls via toolUseId, mutating
-// `errored`/`errorReason` on the typed call when an error result arrives.
+/**
+ * Streams a session JSONL file, applying `predicate` + `build` to each tool_use
+ * item. Correlates subsequent tool_result events back to their tool_use via id.
+ *
+ * Error semantics: `errored` is set to true when the corresponding tool_result
+ * has `is_error: true` OR when its content text matches a skill-graveyard-flavoured
+ * regex (`InputValidationError`, "skill not found", etc.). Consumers with different
+ * error classification needs (e.g. mcp-graveyard distinguishing tool-name errors
+ * from runtime errors) should post-filter the returned calls.
+ */
 export async function parseToolCalls<T extends ToolCallBase>(
   filepath: string,
   projectKey: string,
