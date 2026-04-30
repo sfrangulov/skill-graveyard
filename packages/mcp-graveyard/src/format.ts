@@ -1,7 +1,7 @@
 import type { AuditReport, McpServerSummary, McpBucket } from "./types.js";
 import type { PrunePlanEntry } from "./prune.js";
 import type { ProjectStat } from "./projects.js";
-import type { SuggestRow } from "./suggest.js";
+import type { SuggestRow, SuggestCategory } from "./suggest.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -159,13 +159,16 @@ export function formatProjectsReport(stats: ProjectStat[], opts: FormatOptions):
 export function formatSuggestReport(rows: SuggestRow[], opts: FormatOptions): string {
   const c = (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
   if (rows.length === 0) return c(C.dim, "no missing or hallucinated invocations to classify");
-  const byCategory = new Map<string, SuggestRow[]>();
+  const byCategory = new Map<SuggestCategory, SuggestRow[]>();
   for (const r of rows) {
     if (!byCategory.has(r.category)) byCategory.set(r.category, []);
     byCategory.get(r.category)!.push(r);
   }
   const lines: string[] = [];
-  for (const [cat, items] of byCategory) {
+  const categoryOrder: SuggestCategory[] = ["TOOL_CONFUSION", "TYPO", "REMOVED_SERVER", "UNCLASSIFIED"];
+  for (const cat of categoryOrder) {
+    const items = byCategory.get(cat) ?? [];
+    if (items.length === 0) continue;
     lines.push(c(C.bold, `${cat} (${items.length})`));
     for (const r of items) {
       const tail = r.reason ? c(C.dim, `  — ${r.reason}`) : "";

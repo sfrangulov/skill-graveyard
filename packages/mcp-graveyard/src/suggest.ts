@@ -1,4 +1,4 @@
-import { KNOWN_TOOLS } from "@skill-graveyard/core";
+import { isKnownTool } from "@skill-graveyard/core";
 import { runAudit } from "./audit.js";
 
 export type SuggestCategory = "TYPO" | "REMOVED_SERVER" | "TOOL_CONFUSION" | "UNCLASSIFIED";
@@ -11,13 +11,18 @@ export interface SuggestRow {
 }
 
 export function classify(server: string, configuredServers: string[]): SuggestRow {
-  if (KNOWN_TOOLS.has(server)) {
+  if (isKnownTool(server)) {
     return { server, category: "TOOL_CONFUSION", reason: `"${server}" is a built-in CC tool name, not an MCP server` };
   }
+  let best: { name: string; dist: number } | null = null;
   for (const c of configuredServers) {
-    if (levenshtein(server, c) <= 2) {
-      return { server, category: "TYPO", match: c, reason: `≈ "${c}" (distance ${levenshtein(server, c)})` };
+    const d = levenshtein(server, c);
+    if (d <= 2 && (best === null || d < best.dist || (d === best.dist && c < best.name))) {
+      best = { name: c, dist: d };
     }
+  }
+  if (best !== null) {
+    return { server, category: "TYPO", match: best.name, reason: `≈ "${best.name}" (distance ${best.dist})` };
   }
   return { server, category: "UNCLASSIFIED" };
 }
