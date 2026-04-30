@@ -101,6 +101,9 @@ export function formatDrillDown(server: string, summary: McpServerSummary, opts:
   if (dead > 0) {
     lines.push(c(C.bold, `DEAD TOOLS (${dead})`));
     lines.push(c(C.dim, "  (advertised in sessions but never successfully invoked)"));
+    // We don't have the full advertised list at this layer — for v1 we surface counts only.
+    // Listing each dead tool name requires keeping per-tool data through the aggregation,
+    // which is a Task 8 enhancement.
   }
   return lines.join("\n");
 }
