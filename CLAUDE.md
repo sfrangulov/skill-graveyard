@@ -78,7 +78,7 @@ The Pages site (<https://sfrangulov.github.io/skill-graveyard/>) deploys automat
 
 ## Conventions
 
-- Commit subjects are short, lowercase, imperative ("fix ci test glob", not "Fixed the CI test glob"). No conventional-commits prefix. No `Co-Authored-By` line unless the user asks for one.
+- Commit subjects are short, lowercase, imperative ("fix ci test glob", not "Fixed the CI test glob"). Conventional-commits prefixes (`fix:`, `feat:`, `chore:`, `docs:`, etc.) are permitted but not required — use them when they help release tooling infer bump types, otherwise a bare imperative subject is fine. No `Co-Authored-By` line unless the user asks for one.
 - Don't push automatically after committing. Wait for explicit confirmation.
 - Don't run destructive git operations (force-push, hard reset, branch delete) without confirmation.
 - `.claude/` at the repo root is local Claude Code state. It's untracked and intentionally not in `.gitignore` — leave it alone.
