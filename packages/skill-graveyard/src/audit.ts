@@ -1,10 +1,8 @@
 import {
+  discoverInstalledSkills,
   findSessionFiles,
   parseSession,
   type SkillCall,
-} from "./parser.js";
-import {
-  discoverInstalledSkills,
   type InstalledSkill,
   resolveClaudePaths,
   type ClaudePaths,

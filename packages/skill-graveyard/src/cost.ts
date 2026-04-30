@@ -7,7 +7,7 @@ import {
   type AuditReport,
   type AuditRow,
 } from "./audit.js";
-import { findSessionFiles } from "./parser.js";
+import { findSessionFiles } from "@skill-graveyard/core";
 import { estimateTokens, TOKENIZER_NAME } from "@skill-graveyard/core";
 
 export { estimateTokens, TOKENIZER_NAME };

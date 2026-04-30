@@ -11,3 +11,6 @@ export {
   findGitRoot,
 } from "./discovery.js";
 export type { SkillSource, InstalledSkill } from "./discovery.js";
+
+export { findSessionFiles, parseSession } from "./parser.js";
+export type { SkillCall } from "./parser.js";

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { computeProjects } from "./projects.js";
-import type { SkillCall } from "./parser.js";
+import type { SkillCall } from "@skill-graveyard/core";
 
 function call(opts: Partial<SkillCall> & { skill: string; sessionId: string; cwd?: string | null }): SkillCall {
   return {

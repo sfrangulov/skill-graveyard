@@ -1,4 +1,4 @@
-import { findSessionFiles, parseSession, type SkillCall } from "./parser.js";
+import { findSessionFiles, parseSession, type SkillCall } from "@skill-graveyard/core";
 import { discoverInstalledSkills, resolveClaudePaths } from "@skill-graveyard/core";
 
 export interface ProjectSkillStat {
