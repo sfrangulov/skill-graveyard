@@ -17,6 +17,7 @@ This is an npm workspaces monorepo:
 
 - `packages/core/` — `@skill-graveyard/core` (published). Shared parser, discovery, paths, tokenizer, known_tools. Generic `parseToolCalls<T>` lets sister CLIs reuse the JSONL stream.
 - `packages/skill-graveyard/` — published as `skill-graveyard`. CLI, all subcommand implementations (`audit`, `prune`, `suggest`, `projects`, `cost`, `outdated`), `format.ts`.
+- `packages/mcp-graveyard/` — published as `mcp-graveyard`. CLI for auditing MCP server tool usage. Mirrors skill-graveyard's bucket model (active/dead/missing/hallucinated) but for MCP servers. Plugin assets (`.claude-plugin/`, `commands/`) live INSIDE the package — no prepack/postpack copy hack.
 - `.claude-plugin/`, `commands/` — plugin assets at repo root. Pulled into the `skill-graveyard` tarball at pack time via `prepack`/`postpack` scripts in `packages/skill-graveyard/package.json` (which copy them into the package dir before pack and remove them after).
 - `docs/` — Pages site (`docs/index.html`) and design specs (`docs/specs/`).
 

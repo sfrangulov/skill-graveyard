@@ -18,6 +18,18 @@ Audit which Claude Code skills you actually use. Parses your local session logs 
 
 Same parser, multiple signals: it's not just a graveyard, it's an audit of where your skill setup is over- and under-provisioned.
 
+### Companion tool: mcp-graveyard
+
+The same dual-signal idea applied to MCP server tools: which configured servers
+does Claude actually invoke, and which tool names is it hallucinating?
+
+```sh
+npx mcp-graveyard
+```
+
+Server-first audit, `prune` with automatic backup, and `projects` /
+`suggest` for finer signals. See [packages/mcp-graveyard](packages/mcp-graveyard/).
+
 ## Why this exists
 
 I had 65 skills installed across user, plugin, and agent paths. After parsing 30 days of my own session logs, I found Claude had actually invoked 14 of them. The other 51 were still loading their `description` strings into every API request — about 500K skill-metadata tokens over the window covering skills that were never called once. I built this so I could see the gap, and to surface a second signal I didn't expect: Claude regularly invokes built-in tool names (`Bash`, `Read`, `Edit`) as if they were skills, which the runtime then errors on. Same parser, both answers.
