@@ -712,7 +712,7 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
   <!-- ── 04 ───────────────────────────────────── -->
   <section class="reveal" id="install">
     <p class="section-head"><span class="num">04</span> install</p>
-    <h2>Three ways in.</h2>
+    <h2>Four ways in.</h2>
 
     <div class="install">
       <div class="path">
@@ -729,6 +729,11 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
         <span class="label">claude code plugin</span>
         <p class="desc">Adds the <code>/audit-skills</code> slash command (planned via plugin registry).</p>
         <div class="cmdblock"><span class="prompt">$</span><span class="cmd">claude /plugin install skill-graveyard</span><button data-copy="claude /plugin install skill-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">skills.sh</span>
+        <p class="desc">Install as an Agent Skill — Claude auto-discovers it in any session. Same command also installs the sister <code>mcp-graveyard</code> skill.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx skills add sfrangulov/skill-graveyard</span><button data-copy="npx skills add sfrangulov/skill-graveyard" type="button">copy</button></div>
       </div>
     </div>
   </section>
@@ -788,6 +793,11 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
         <span class="label">claude code plugin</span>
         <p class="desc">Adds the <code>/audit-mcp-tools</code> slash command (via plugin registry).</p>
         <div class="cmdblock"><span class="prompt">$</span><span class="cmd">claude /plugin install mcp-graveyard</span><button data-copy="claude /plugin install mcp-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">skills.sh</span>
+        <p class="desc">Install as an Agent Skill — Claude auto-discovers it in any session. Same command also installs <code>skill-graveyard</code>.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx skills add sfrangulov/skill-graveyard</span><button data-copy="npx skills add sfrangulov/skill-graveyard" type="button">copy</button></div>
       </div>
     </div>
 
