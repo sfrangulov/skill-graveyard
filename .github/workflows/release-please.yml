@@ -1,0 +1,58 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      core_released: ${{ steps.release.outputs['packages/core--release_created'] }}
+      skill_released: ${{ steps.release.outputs['packages/skill-graveyard--release_created'] }}
+      mcp_released: ${{ steps.release.outputs['packages/mcp-graveyard--release_created'] }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - name: Build core (always — others depend on its dist)
+        run: npm run build --workspace=@skill-graveyard/core
+
+      - name: Publish @skill-graveyard/core
+        if: needs.release-please.outputs.core_released == 'true'
+        run: npm publish --workspace=@skill-graveyard/core --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish skill-graveyard
+        if: needs.release-please.outputs.skill_released == 'true'
+        run: npm publish --workspace=skill-graveyard --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish mcp-graveyard
+        if: needs.release-please.outputs.mcp_released == 'true'
+        run: npm publish --workspace=mcp-graveyard --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

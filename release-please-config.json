@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": true,
+  "tag-separator": "@v",
+  "separate-pull-requests": false,
+  "packages": {
+    "packages/core": {
+      "package-name": "@skill-graveyard/core",
+      "component": "core"
+    },
+    "packages/skill-graveyard": {
+      "package-name": "skill-graveyard",
+      "component": "skill-graveyard",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "../../.claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
+    "packages/mcp-graveyard": {
+      "package-name": "mcp-graveyard",
+      "component": "mcp-graveyard",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": ".claude-plugin/plugin.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}

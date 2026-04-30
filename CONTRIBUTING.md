@@ -29,6 +29,34 @@ Tests use Node's built-in test runner (`node --test`) and run against real `os.t
 
 Test files live colocated under `src/*.test.ts`. New tests should follow the same flat layout (the test glob is `src/*.test.ts`, single `*`, intentional — see `CLAUDE.md` for the gotcha).
 
+## Releasing
+
+This repo uses [release-please](https://github.com/googleapis/release-please) to automate version bumps, CHANGELOG generation, and npm publishes. You don't run `npm publish` manually.
+
+### Commit prefixes
+
+Use [conventional-commits](https://www.conventionalcommits.org/) prefixes when the change should produce a release:
+
+- `fix: ...` — patch bump (e.g. 0.8.1 → 0.8.2)
+- `feat: ...` — minor bump (0.8.1 → 0.9.0)
+- `feat!: ...` or `BREAKING CHANGE:` in body — major bump (0.8.1 → 1.0.0)
+- `chore:`, `docs:`, `style:`, `refactor:`, `test:`, `build:`, `ci:` — no version bump, just appears in CHANGELOG history
+
+For monorepo packages, scope the change to one package by mentioning the package in the commit body, OR by structuring commits so each touches one package's directory.
+
+A bare imperative subject without a prefix is also fine when the change shouldn't trigger a release (config tweaks, internal docs, etc.).
+
+### Release flow
+
+1. Push commits to `main` with appropriate prefixes.
+2. `release-please` bot opens or updates a "Release PR" listing the queued bumps.
+3. Review and merge the Release PR. The merge:
+   - Creates git tags (`core@vX.Y.Z`, etc.)
+   - Publishes new package versions to npm
+   - Creates GitHub releases with the generated CHANGELOG entries
+
+If a release breaks something, manual override is still possible — just bump versions in the affected package.json files and run `npm publish --workspace=<name>` locally with an OTP. release-please will resync on the next push.
+
 ## Project layout
 
 - `src/cli.ts` — argument routing only, no business logic
