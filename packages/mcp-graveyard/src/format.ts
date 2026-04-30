@@ -144,10 +144,11 @@ export function formatProjectsReport(stats: ProjectStat[], opts: FormatOptions):
   const lines: string[] = [];
   for (const s of stats) {
     lines.push(`${s.cwd}  ${c(C.dim, `${s.sessions} ses, ${s.totalCalls} calls, ${s.servers.length} servers`)}`);
+    const nameW = s.servers.length > 0 ? Math.max(...s.servers.map((srv) => srv.name.length)) : 0;
     for (const srv of s.servers) {
-      const mark = srv.errored > 0 ? c(C.red, "✗") : " ";
-      const errorTag = srv.errored > 0 ? c(C.red, ` (${srv.errored} errored)`) : "";
-      lines.push(`  ${mark} ${srv.name.padEnd(40)}${String(srv.calls).padStart(4)}×${errorTag}`);
+      const mark = srv.hallucinated > 0 ? c(C.red, "✗") : " ";
+      const tag = srv.hallucinated > 0 ? c(C.red, ` (${srv.hallucinated} hallucinated)`) : "";
+      lines.push(`  ${mark} ${srv.name.padEnd(nameW)}${String(srv.calls).padStart(4)}×${tag}`);
     }
     lines.push("");
   }

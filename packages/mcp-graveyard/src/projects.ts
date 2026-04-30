@@ -5,7 +5,7 @@ export interface ProjectStat {
   cwd: string;
   sessions: number;
   totalCalls: number;
-  servers: { name: string; calls: number; errored: number }[];
+  servers: { name: string; calls: number; hallucinated: number }[];
 }
 
 export interface ProjectsOptions {
@@ -30,12 +30,12 @@ export async function runProjects(opts: ProjectsOptions): Promise<ProjectStat[]>
   }
   const out: ProjectStat[] = [];
   for (const [cwd, data] of byCwd) {
-    const byServer = new Map<string, { calls: number; errored: number }>();
+    const byServer = new Map<string, { calls: number; hallucinated: number }>();
     for (const c of data.calls) {
-      if (!byServer.has(c.server)) byServer.set(c.server, { calls: 0, errored: 0 });
+      if (!byServer.has(c.server)) byServer.set(c.server, { calls: 0, hallucinated: 0 });
       const e = byServer.get(c.server)!;
       e.calls++;
-      if (c.errored) e.errored++;
+      if (c.errored) e.hallucinated++;
     }
     out.push({
       cwd,
