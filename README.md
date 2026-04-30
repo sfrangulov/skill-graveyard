@@ -54,6 +54,14 @@ npm i -g skill-graveyard
 skill-graveyard
 ```
 
+Or as a Claude Code skill (auto-discovered by Claude in any session, via [skills.sh](https://skills.sh/)):
+
+```sh
+npx skills add sfrangulov/skill-graveyard
+```
+
+The skills.sh install adds a `SKILL.md` to your Claude Code skills directory; Claude picks it up automatically when you ask audit-shaped questions ("which skills don't I use?", "clean up my skills"). The same command also installs the sister `mcp-graveyard` skill from this repo. Compatible with the npm install — they don't conflict.
+
 Requires Node 18+.
 
 ## Usage
