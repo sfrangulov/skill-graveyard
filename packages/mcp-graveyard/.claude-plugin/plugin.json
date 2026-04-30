@@ -1,0 +1,8 @@
+{
+  "name": "mcp-graveyard",
+  "version": "0.1.0",
+  "description": "Audit which MCP server tools your Claude Code sessions actually invoke. Server-first, surfaces dead servers and hallucinated calls.",
+  "homepage": "https://sfrangulov.github.io/skill-graveyard/",
+  "license": "MIT",
+  "keywords": ["audit", "mcp", "tools"]
+}

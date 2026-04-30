@@ -6,7 +6,7 @@
   "bin": {
     "mcp-graveyard": "dist/cli.js"
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": ["dist", "README.md", "LICENSE", ".claude-plugin", "commands"],
   "engines": { "node": ">=18" },
   "scripts": {
     "dev": "tsx src/cli.ts",
