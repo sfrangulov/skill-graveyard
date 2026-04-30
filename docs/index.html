@@ -791,8 +791,15 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
       </div>
     </div>
 
-    <div class="terminal">
-      <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ mcp-graveyard --days 30</span></div>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">audit</span>
+        <span class="sig">[--days N] [--only active|dead|missing|hallucinated] [--tools &lt;server&gt;] [--json]</span>
+      </div>
+      <p>Default command. Sorts every MCP server into the four buckets — active (configured and called successfully), dead (configured but never called), missing (called but not in <code>~/.claude.json</code>), hallucinated (called and rejected with <code>InputValidationError</code>). Server-first; <code>--tools &lt;server&gt;</code> drills down per-tool.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ mcp-graveyard --days 30</span></div>
 <pre><span class="h">mcp-graveyard</span> <span class="mt">— 30 days · 8 servers configured · 143 calls · 112 succeeded · 31 errored</span>
 
 <span class="a">ACTIVE (3)</span>  <span class="mt">configured and invoked — keep</span>
@@ -815,7 +822,72 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
 
 <span class="rl">→ run: mcp-graveyard prune</span>  <i>to clear DEAD servers</i>
 </pre>
-    </div>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">prune</span>
+        <span class="sig">[--apply] [--only &lt;server&gt;] [--days N]</span>
+      </div>
+      <p>Reads the audit and emits a removal plan for DEAD servers. Print-only by default. <code>--apply</code> writes a <code>0o600</code> backup of the full <code>mcpServers</code> entry (command, args, env — env may contain API keys) to <code>~/.claude/mcp-graveyard-backup/&lt;ISO&gt;.json</code>, then runs <code>claude mcp remove</code> sequentially per server. Continues on individual failures. Pre-flight checks <code>claude --version</code> before any I/O.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ mcp-graveyard prune</span></div>
+<pre><span class="h">mcp-graveyard prune</span> <span class="mt">— plan: 3 servers to remove (0 successful calls in 30 days)</span>
+
+  pencil                                    claude mcp remove pencil
+  plugin_figma_figma                        claude mcp remove plugin_figma_figma
+  claude_ai_Gmail                           claude mcp remove claude_ai_Gmail
+
+<span class="mt">re-run with --apply to execute (backup is automatic)</span>
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">projects</span>
+        <span class="sig">[--days N] [--json]</span>
+      </div>
+      <p>Same parser, different cut: groups every MCP call by the <code>cwd</code> recorded in the session log. Surfaces servers that are configured globally but only used in one project — a signal to consider moving them to <code>&lt;project&gt;/.mcp.json</code>. Inline <code>(N hallucinated)</code> tags flag projects where Claude is calling tool names that don't exist.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ mcp-graveyard projects</span></div>
+<pre><span class="h">~/projects/client-analytics</span>  <span class="mt">17 ses, 39 calls, 2 servers</span>
+    plugin_supabase_supabase    31×
+    plugin_claude-mem_mcp-search 8×
+
+<span class="h">~/projects/clientco/web-platform</span>  <span class="mt">2 ses, 2 calls, 1 server</span>
+  <span class="d">✗</span> plugin_supabase_supabase  2× <span class="d">(2 hallucinated)</span>
+
+<span class="h">~/projects/landing</span>  <span class="mt">5 ses, 8 calls, 1 server</span>
+    pencil                       8×
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">suggest</span>
+        <span class="sig">[--days N] [--json]</span>
+      </div>
+      <p>Classifies <code>missing</code> and <code>hallucinated</code> server names into actionable buckets — TYPO (closest configured server within Levenshtein 2), TOOL_CONFUSION (Claude called a built-in CC tool name as if it were an MCP server), UNCLASSIFIED (no pattern matched). Each row carries the reason inline so triage is one-pass.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ mcp-graveyard suggest</span></div>
+<pre><span class="y">TOOL_CONFUSION (2)</span>
+  <span class="mt">"Bash"</span>  <span class="mt">— "Bash" is a built-in CC tool name, not an MCP server</span>
+  <span class="mt">"Read"</span>  <span class="mt">— "Read" is a built-in CC tool name, not an MCP server</span>
+
+<span class="m">TYPO (1)</span>
+  supbase  <span class="mt">— ≈ "supabase" (distance 1)</span>
+
+<span class="mt">UNCLASSIFIED (3)</span>
+  <span class="mt">— no pattern matched, manual review</span>
+  old-analytics-server
+  legacy-pdf-tool
+  some-fork-of-thing
+</pre>
+      </div>
+    </article>
 
     <p style="margin-top: 2rem;"><a href="https://github.com/sfrangulov/skill-graveyard/blob/main/packages/mcp-graveyard/README.md">Full docs and subcommand reference →</a></p>
   </section>
