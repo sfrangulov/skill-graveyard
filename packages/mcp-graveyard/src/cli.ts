@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { dirname, join } from "node:path";
 import { runAudit } from "./audit.js";
-import { formatAuditReport, formatAuditJson, formatDrillDown, formatPruneReport } from "./format.js";
+import { formatAuditReport, formatAuditJson, formatDrillDown, formatPruneReport, formatProjectsReport } from "./format.js";
 import { planPrune, applyPrune, writePruneBackup, ensureClaudeCliAvailable } from "./prune.js";
+import { runProjects } from "./projects.js";
 import { readMcpServers } from "./mcp_config.js";
 import type { McpBucket } from "./types.js";
 
@@ -103,6 +104,15 @@ async function main() {
       for (const f of result.failed) console.log(`  ${f.server}: ${f.error}`);
       process.exit(1);
     }
+    return;
+  }
+  if (args.subcommand === "projects") {
+    const stats = await runProjects({ claudeDir: args.claudeDir, windowDays: args.days });
+    if (args.json) {
+      console.log(JSON.stringify(stats, null, 2));
+      return;
+    }
+    console.log(formatProjectsReport(stats, { color: process.stdout.isTTY ?? false }));
     return;
   }
   if (args.subcommand !== "audit") {

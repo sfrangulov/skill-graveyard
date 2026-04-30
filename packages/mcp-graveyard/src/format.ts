@@ -1,5 +1,6 @@
 import type { AuditReport, McpServerSummary, McpBucket } from "./types.js";
 import type { PrunePlanEntry } from "./prune.js";
+import type { ProjectStat } from "./projects.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -134,5 +135,21 @@ export function formatPruneReport(
     "",
     c(C.dim, `re-run with --apply to execute (backup is automatic)`),
   ];
+  return lines.join("\n");
+}
+
+export function formatProjectsReport(stats: ProjectStat[], opts: FormatOptions): string {
+  const c = (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
+  if (stats.length === 0) return c(C.dim, "no MCP tool calls in window");
+  const lines: string[] = [];
+  for (const s of stats) {
+    lines.push(`${s.cwd}  ${c(C.dim, `${s.sessions} ses, ${s.totalCalls} calls, ${s.servers.length} servers`)}`);
+    for (const srv of s.servers) {
+      const mark = srv.errored > 0 ? c(C.red, "✗") : " ";
+      const errorTag = srv.errored > 0 ? c(C.red, ` (${srv.errored} errored)`) : "";
+      lines.push(`  ${mark} ${srv.name.padEnd(40)}${String(srv.calls).padStart(4)}×${errorTag}`);
+    }
+    lines.push("");
+  }
   return lines.join("\n");
 }
