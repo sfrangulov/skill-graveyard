@@ -17,8 +17,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "prepack": "cp -r ../../.claude-plugin ../../commands .",
-    "postpack": "rm -rf .claude-plugin commands",
+    "prepack": "cp -r ../../.claude-plugin ../../commands ../../README.md ../../LICENSE .",
+    "postpack": "rm -rf .claude-plugin commands README.md LICENSE",
     "dev": "tsx src/cli.ts",
     "build": "tsc",
     "postbuild": "chmod +x dist/cli.js",
