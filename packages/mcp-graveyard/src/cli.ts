@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { dirname, join } from "node:path";
 import { runAudit } from "./audit.js";
-import { formatAuditReport, formatAuditJson, formatDrillDown, formatPruneReport, formatProjectsReport } from "./format.js";
+import { formatAuditReport, formatAuditJson, formatDrillDown, formatPruneReport, formatProjectsReport, formatSuggestReport } from "./format.js";
+import { runSuggest } from "./suggest.js";
 import { planPrune, applyPrune, writePruneBackup, ensureClaudeCliAvailable } from "./prune.js";
 import { runProjects } from "./projects.js";
 import { readMcpServers } from "./mcp_config.js";
@@ -115,8 +116,14 @@ async function main() {
     console.log(formatProjectsReport(stats, { color: process.stdout.isTTY ?? false }));
     return;
   }
-  if (args.subcommand !== "audit") {
-    die(`subcommand "${args.subcommand}" not implemented yet`);
+  if (args.subcommand === "suggest") {
+    const rows = await runSuggest({ claudeDir: args.claudeDir, windowDays: args.days });
+    if (args.json) {
+      console.log(JSON.stringify(rows, null, 2));
+      return;
+    }
+    console.log(formatSuggestReport(rows, { color: process.stdout.isTTY ?? false }));
+    return;
   }
   const report = await runAudit({
     claudeDir: args.claudeDir,

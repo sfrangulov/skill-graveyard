@@ -1,6 +1,7 @@
 import type { AuditReport, McpServerSummary, McpBucket } from "./types.js";
 import type { PrunePlanEntry } from "./prune.js";
 import type { ProjectStat } from "./projects.js";
+import type { SuggestRow } from "./suggest.js";
 
 const C = {
   reset: "\x1b[0m",
@@ -149,6 +150,26 @@ export function formatProjectsReport(stats: ProjectStat[], opts: FormatOptions):
       const mark = srv.hallucinated > 0 ? c(C.red, "✗") : " ";
       const tag = srv.hallucinated > 0 ? c(C.red, ` (${srv.hallucinated} hallucinated)`) : "";
       lines.push(`  ${mark} ${srv.name.padEnd(nameW)}${String(srv.calls).padStart(4)}×${tag}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+export function formatSuggestReport(rows: SuggestRow[], opts: FormatOptions): string {
+  const c = (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
+  if (rows.length === 0) return c(C.dim, "no missing or hallucinated invocations to classify");
+  const byCategory = new Map<string, SuggestRow[]>();
+  for (const r of rows) {
+    if (!byCategory.has(r.category)) byCategory.set(r.category, []);
+    byCategory.get(r.category)!.push(r);
+  }
+  const lines: string[] = [];
+  for (const [cat, items] of byCategory) {
+    lines.push(c(C.bold, `${cat} (${items.length})`));
+    for (const r of items) {
+      const tail = r.reason ? c(C.dim, `  — ${r.reason}`) : "";
+      lines.push(`  ${r.server}${tail}`);
     }
     lines.push("");
   }
