@@ -1,12 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { McpServerEntry } from "./types.js";
 
-export async function readMcpServers(claudeDir: string): Promise<McpServerEntry[]> {
-  const path = join(claudeDir, ".claude.json");
+export async function readMcpServers(claudeJsonPath: string): Promise<McpServerEntry[]> {
   let raw: string;
   try {
-    raw = await readFile(path, "utf8");
+    raw = await readFile(claudeJsonPath, "utf8");
   } catch {
     return [];
   }
@@ -36,7 +34,7 @@ export async function readMcpServers(claudeDir: string): Promise<McpServerEntry[
             ) as [string, string][]
           )
         : null,
-      configuredIn: path,
+      configuredIn: claudeJsonPath,
     });
   }
   return out;

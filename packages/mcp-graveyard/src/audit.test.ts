@@ -8,15 +8,17 @@ import { runAudit } from "./audit.js";
 function makeClaudeWith(opts: {
   mcpServers?: Record<string, unknown>;
   sessions?: { projectKey: string; events: unknown[] }[];
-}): string {
-  const dir = mkdtempSync(join(tmpdir(), "mcp-audit-test-"));
+}): { homeDir: string; claudeDir: string } {
+  const homeDir = mkdtempSync(join(tmpdir(), "mcp-audit-test-"));
+  const claudeDir = join(homeDir, ".claude");
+  mkdirSync(claudeDir, { recursive: true });
   if (opts.mcpServers) {
     writeFileSync(
-      join(dir, ".claude.json"),
+      join(homeDir, ".claude.json"),
       JSON.stringify({ mcpServers: opts.mcpServers })
     );
   }
-  const projectsDir = join(dir, "projects");
+  const projectsDir = join(claudeDir, "projects");
   mkdirSync(projectsDir, { recursive: true });
   for (const session of opts.sessions ?? []) {
     const sd = join(projectsDir, session.projectKey);
@@ -26,7 +28,7 @@ function makeClaudeWith(opts: {
       session.events.map((e) => JSON.stringify(e)).join("\n") + "\n"
     );
   }
-  return dir;
+  return { homeDir, claudeDir };
 }
 
 function event(content: unknown[]): unknown {
@@ -39,7 +41,7 @@ function event(content: unknown[]): unknown {
 }
 
 test("server with successful call lands in 'active'", async () => {
-  const dir = makeClaudeWith({
+  const { homeDir, claudeDir } = makeClaudeWith({
     mcpServers: { pencil: { command: "x" } },
     sessions: [
       {
@@ -53,33 +55,33 @@ test("server with successful call lands in 'active'", async () => {
     ],
   });
   try {
-    const report = await runAudit({ claudeDir: dir, windowDays: 30 });
+    const report = await runAudit({ claudeDir, windowDays: 30 });
     const pencil = report.rows.find((r) => r.name === "pencil")!;
     assert.equal(pencil.bucket, "active");
     assert.equal(pencil.successfulCalls, 1);
     assert.equal(pencil.toolsInvoked.length, 1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });
 
 test("configured server with zero calls lands in 'dead'", async () => {
-  const dir = makeClaudeWith({
+  const { homeDir, claudeDir } = makeClaudeWith({
     mcpServers: { figma: { command: "x" } },
     sessions: [],
   });
   try {
-    const report = await runAudit({ claudeDir: dir, windowDays: 30 });
+    const report = await runAudit({ claudeDir, windowDays: 30 });
     const figma = report.rows.find((r) => r.name === "figma")!;
     assert.equal(figma.bucket, "dead");
     assert.equal(figma.successfulCalls, 0);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });
 
 test("invocation of a server NOT in claude.json lands in 'missing'", async () => {
-  const dir = makeClaudeWith({
+  const { homeDir, claudeDir } = makeClaudeWith({
     mcpServers: {},
     sessions: [
       {
@@ -93,17 +95,17 @@ test("invocation of a server NOT in claude.json lands in 'missing'", async () =>
     ],
   });
   try {
-    const report = await runAudit({ claudeDir: dir, windowDays: 30 });
+    const report = await runAudit({ claudeDir, windowDays: 30 });
     const old = report.rows.find((r) => r.name === "old_server")!;
     assert.equal(old.bucket, "missing");
     assert.equal(old.configured, false);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });
 
 test("InputValidationError flips server into 'hallucinated'", async () => {
-  const dir = makeClaudeWith({
+  const { homeDir, claudeDir } = makeClaudeWith({
     mcpServers: { supabase: { command: "x" } },
     sessions: [
       {
@@ -120,19 +122,19 @@ test("InputValidationError flips server into 'hallucinated'", async () => {
     ],
   });
   try {
-    const report = await runAudit({ claudeDir: dir, windowDays: 30 });
+    const report = await runAudit({ claudeDir, windowDays: 30 });
     const sup = report.rows.find((r) => r.name === "supabase")!;
     // active OR hallucinated — buckets aren't mutually exclusive on success+error mix,
     // but with only an errored call it's hallucinated.
     assert.equal(sup.bucket, "hallucinated");
     assert.equal(sup.erroredCalls, 1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });
 
 test("filters by --only", async () => {
-  const dir = makeClaudeWith({
+  const { homeDir, claudeDir } = makeClaudeWith({
     mcpServers: { live: { command: "x" }, dead: { command: "y" } },
     sessions: [
       {
@@ -146,16 +148,16 @@ test("filters by --only", async () => {
     ],
   });
   try {
-    const report = await runAudit({ claudeDir: dir, windowDays: 30, only: "dead" });
+    const report = await runAudit({ claudeDir, windowDays: 30, only: "dead" });
     assert.equal(report.rows.length, 1);
     assert.equal(report.rows[0]!.name, "dead");
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });
 
 test("server with both successful and errored calls lands in 'active' (priority over hallucinated)", async () => {
-  const dir = makeClaudeWith({
+  const { homeDir, claudeDir } = makeClaudeWith({
     mcpServers: { mixed: { command: "x" } },
     sessions: [
       {
@@ -175,12 +177,12 @@ test("server with both successful and errored calls lands in 'active' (priority 
     ],
   });
   try {
-    const report = await runAudit({ claudeDir: dir, windowDays: 30 });
+    const report = await runAudit({ claudeDir, windowDays: 30 });
     const mixed = report.rows.find((r) => r.name === "mixed")!;
     assert.equal(mixed.bucket, "active", "active wins over hallucinated when both are present");
     assert.equal(mixed.successfulCalls, 1);
     assert.equal(mixed.erroredCalls, 1);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(homeDir, { recursive: true, force: true });
   }
 });

@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { findSessionFiles, resolveClaudePaths } from "@skill-graveyard/core";
 import { readMcpServers } from "./mcp_config.js";
 import { parseMcpSession } from "./mcp_parser.js";
@@ -6,8 +7,9 @@ import type { McpServerEntry, McpServerSummary, McpBucket, AuditOptions, AuditRe
 export async function runAudit(opts: AuditOptions): Promise<AuditReport> {
   const paths = resolveClaudePaths(opts.claudeDir);
   const since = Date.now() - opts.windowDays * 24 * 60 * 60 * 1000;
+  const claudeJsonPath = join(dirname(paths.claudeDir), ".claude.json");
   const [servers, sessionFiles] = await Promise.all([
-    readMcpServers(paths.claudeDir),
+    readMcpServers(claudeJsonPath),
     findSessionFiles(paths.projectsDir, since),
   ]);
   const allCalls: McpToolCall[] = [];

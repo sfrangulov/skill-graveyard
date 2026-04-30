@@ -5,18 +5,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readMcpServers } from "./mcp_config.js";
 
-function makeClaudeDir(claudeJsonContent: object | null): string {
+function makeClaudeJson(claudeJsonContent: object | null): { dir: string; path: string } {
   const dir = mkdtempSync(join(tmpdir(), "mcp-config-test-"));
+  const path = join(dir, ".claude.json");
   if (claudeJsonContent !== null) {
-    writeFileSync(join(dir, ".claude.json"), JSON.stringify(claudeJsonContent));
+    writeFileSync(path, JSON.stringify(claudeJsonContent));
   }
-  return dir;
+  return { dir, path };
 }
 
 test("returns empty list when ~/.claude.json is missing", async () => {
-  const dir = makeClaudeDir(null);
+  const { dir, path } = makeClaudeJson(null);
   try {
-    const servers = await readMcpServers(dir);
+    const servers = await readMcpServers(path);
     assert.deepEqual(servers, []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -24,9 +25,9 @@ test("returns empty list when ~/.claude.json is missing", async () => {
 });
 
 test("returns empty list when mcpServers key is missing", async () => {
-  const dir = makeClaudeDir({ otherStuff: 42 });
+  const { dir, path } = makeClaudeJson({ otherStuff: 42 });
   try {
-    const servers = await readMcpServers(dir);
+    const servers = await readMcpServers(path);
     assert.deepEqual(servers, []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -34,7 +35,7 @@ test("returns empty list when mcpServers key is missing", async () => {
 });
 
 test("parses mcpServers entries with command/args/env", async () => {
-  const dir = makeClaudeDir({
+  const { dir, path } = makeClaudeJson({
     mcpServers: {
       pencil: {
         command: "npx",
@@ -48,7 +49,7 @@ test("parses mcpServers entries with command/args/env", async () => {
     },
   });
   try {
-    const servers = await readMcpServers(dir);
+    const servers = await readMcpServers(path);
     assert.equal(servers.length, 2);
     const pencil = servers.find((s) => s.name === "pencil")!;
     assert.equal(pencil.command, "npx");
@@ -63,14 +64,14 @@ test("parses mcpServers entries with command/args/env", async () => {
 });
 
 test("ignores entries that aren't objects", async () => {
-  const dir = makeClaudeDir({
+  const { dir, path } = makeClaudeJson({
     mcpServers: {
       good: { command: "x" },
       malformed: "not an object",
     },
   });
   try {
-    const servers = await readMcpServers(dir);
+    const servers = await readMcpServers(path);
     assert.equal(servers.length, 1);
     assert.equal(servers[0]!.name, "good");
   } finally {
