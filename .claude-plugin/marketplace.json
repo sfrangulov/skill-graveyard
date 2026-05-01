@@ -1,0 +1,26 @@
+{
+  "name": "skill-graveyard",
+  "owner": {
+    "name": "Sergei Frangulov",
+    "url": "https://github.com/sfrangulov"
+  },
+  "plugins": [
+    {
+      "name": "skill-graveyard",
+      "description": "Audit which Claude Code skills you actually invoke. Surfaces dead installs and hallucinated invocations from local session logs.",
+      "source": {
+        "source": "github",
+        "repo": "sfrangulov/skill-graveyard"
+      }
+    },
+    {
+      "name": "mcp-graveyard",
+      "description": "Audit which MCP server tools your Claude Code sessions actually invoke. Surfaces dead servers and hallucinated tool calls.",
+      "source": {
+        "source": "git-subdir",
+        "url": "sfrangulov/skill-graveyard",
+        "path": "packages/mcp-graveyard"
+      }
+    }
+  ]
+}
