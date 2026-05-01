@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0](https://github.com/sfrangulov/skill-graveyard/compare/skill-graveyard@vv0.10.0...skill-graveyard@vv1.0.0) (2026-05-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* drop Claude Code plugin distribution; skills.sh is the only CC channel
+
+### Features
+
+* drop Claude Code plugin distribution; skills.sh is the only CC channel ([b99926b](https://github.com/sfrangulov/skill-graveyard/commit/b99926bbf5863c96dd882293017e365aa1b4079e))
+* **skill-graveyard:** document /run slash command and skills.sh in --help ([3859480](https://github.com/sfrangulov/skill-graveyard/commit/3859480e7c170415bc55d46653b4cefbec9741ed))
+
 ## [0.10.0](https://github.com/sfrangulov/skill-graveyard/compare/skill-graveyard@v0.9.0...skill-graveyard@v0.10.0) (2026-05-01)
 
 

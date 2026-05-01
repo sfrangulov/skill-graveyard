@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/sfrangulov/skill-graveyard/compare/mcp-graveyard@vv0.3.0...mcp-graveyard@vv1.0.0) (2026-05-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* drop Claude Code plugin distribution; skills.sh is the only CC channel
+
+### Features
+
+* drop Claude Code plugin distribution; skills.sh is the only CC channel ([b99926b](https://github.com/sfrangulov/skill-graveyard/commit/b99926bbf5863c96dd882293017e365aa1b4079e))
+* **mcp-graveyard:** add /run slash command router ([21cb9ef](https://github.com/sfrangulov/skill-graveyard/commit/21cb9ef2645c552d38a90839d214a1344bd08c62))
+
+
+### Bug Fixes
+
+* rename Claude Code marketplace to "graveyard" ([e2e78bf](https://github.com/sfrangulov/skill-graveyard/commit/e2e78bf685ca89ac992172b25841e3c68734dcff))
+
 ## [0.3.0](https://github.com/sfrangulov/skill-graveyard/compare/mcp-graveyard@v0.2.0...mcp-graveyard@v0.3.0) (2026-05-01)
 
 
