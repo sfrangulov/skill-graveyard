@@ -15,14 +15,7 @@
     },
     "packages/mcp-graveyard": {
       "package-name": "mcp-graveyard",
-      "component": "mcp-graveyard",
-      "extra-files": [
-        {
-          "type": "json",
-          "path": ".claude-plugin/plugin.json",
-          "jsonpath": "$.version"
-        }
-      ]
+      "component": "mcp-graveyard"
     }
   }
 }

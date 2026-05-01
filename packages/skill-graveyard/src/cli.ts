@@ -96,10 +96,8 @@ EXAMPLES
   skill-graveyard outdated --no-cache
 
 INSIDE CLAUDE CODE
-  Install as a plugin:           /plugin install skill-graveyard@sfrangulov/skill-graveyard
-  Run any subcommand:            /skill-graveyard:run [<subcommand> <flags>]
-  Smart audit with summary:      /skill-graveyard:audit-skills
-  Or as a skills.sh Agent Skill: npx skills add sfrangulov/skill-graveyard
+  Install as a skills.sh Agent Skill — Claude auto-discovers it in any session:
+    npx skills add sfrangulov/skill-graveyard
 `;
 
 export function parseArgs(argv: string[]): ParsedArgs {

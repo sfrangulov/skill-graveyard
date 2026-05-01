@@ -1,6 +1,6 @@
 {
   "name": "skill-graveyard",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Audit which Claude Code skills you actually use — surface dead installs and hallucinated invocations from your session logs.",
   "type": "module",
   "bin": {
@@ -9,16 +9,14 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    ".claude-plugin",
-    "commands"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "prepack": "cp -r ../../.claude-plugin ../../commands ../../README.md ../../LICENSE .",
-    "postpack": "rm -rf .claude-plugin commands README.md LICENSE",
+    "prepack": "cp ../../README.md ../../LICENSE .",
+    "postpack": "rm -f README.md LICENSE",
     "dev": "tsx src/cli.ts",
     "build": "tsc",
     "postbuild": "chmod +x dist/cli.js",

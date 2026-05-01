@@ -17,8 +17,8 @@ This is an npm workspaces monorepo:
 
 - `packages/core/` — `@skill-graveyard/core` (published). Shared parser, discovery, paths, tokenizer, known_tools. Generic `parseToolCalls<T>` lets sister CLIs reuse the JSONL stream.
 - `packages/skill-graveyard/` — published as `skill-graveyard`. CLI, all subcommand implementations (`audit`, `prune`, `suggest`, `projects`, `cost`, `outdated`), `format.ts`.
-- `packages/mcp-graveyard/` — published as `mcp-graveyard`. CLI for auditing MCP server tool usage. Mirrors skill-graveyard's bucket model (active/dead/missing/hallucinated) but for MCP servers. Plugin assets (`.claude-plugin/`, `commands/`) live INSIDE the package — no prepack/postpack copy hack.
-- `.claude-plugin/`, `commands/` — plugin assets at repo root. Pulled into the `skill-graveyard` tarball at pack time via `prepack`/`postpack` scripts in `packages/skill-graveyard/package.json` (which copy them into the package dir before pack and remove them after).
+- `packages/mcp-graveyard/` — published as `mcp-graveyard`. CLI for auditing MCP server tool usage. Mirrors skill-graveyard's bucket model (active/dead/missing/hallucinated) but for MCP servers.
+- `skills/skill-graveyard/SKILL.md`, `skills/mcp-graveyard/SKILL.md` — Agent Skill manifests for [skills.sh](https://skills.sh/). Discovered when users run `npx skills add sfrangulov/skill-graveyard`. NOT shipped in any npm tarball — read directly from the GitHub repo.
 - `release-please-config.json`, `.release-please-manifest.json` — release-please configuration (per-package settings, current version baseline). See the Release section below.
 - `.github/workflows/release-please.yml` — automated release workflow (open Release PR on push to main, publish + tag + GH release on PR merge).
 - `docs/` — Pages site (`docs/index.html`) and design specs (`docs/specs/`).
@@ -57,6 +57,7 @@ These look like missing features. Verify with the user before "fixing":
 - `prune` ignores project-scoped skills (`<project>/.claude/skills/`). Per-project artifacts are intentional.
 - No telemetry. No network calls anywhere in the runtime. `README.md` promises "all analysis is local" — keep it true.
 - The `cost` subcommand uses `cl100k_base` BPE as a proxy for Claude's tokenizer (Anthropic doesn't publish one for Claude 3+). User-facing output must keep the 5–15% drift disclaimer.
+- **No Claude Code plugin / slash commands.** We tried, then removed in skill-graveyard@0.10.0 / mcp-graveyard@0.3.0. The plugin layout repeatedly collided with skills.sh-bundled SKILLs in the `/<plugin>:` namespace and the autocomplete UX never landed cleanly. If reintroducing, the SKILL files in `skills/` MUST stay outside the plugin's auto-scanned paths (Claude Code's plugin loader picks up `<plugin-root>/skills/` automatically), or the namespace collision will reappear.
 
 ## Release
 
@@ -67,25 +68,26 @@ These look like missing features. Verify with the user before "fixing":
 How it works:
 
 1. Author commits with **conventional-commit prefixes** when the change should ship as a release: `fix:` (patch), `feat:` (minor), `feat!:` or `BREAKING CHANGE:` in body (major). `chore:`/`docs:`/`refactor:`/`test:`/`ci:` show in CHANGELOG history but don't bump versions. Bare imperative subjects without a prefix are fine for non-release changes.
-2. On push to `main`, the release-please action either opens or updates a "Release PR" listing the queued bumps for any package with releasable commits. The PR auto-syncs `.claude-plugin/plugin.json` files via `extra-files` config — never edit those by hand.
+2. On push to `main`, the release-please action either opens or updates a "Release PR" listing the queued bumps for any package with releasable commits. **GitHub setting required:** Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" must be ON, otherwise the bot fails with "GitHub Actions is not permitted to create or approve pull requests."
 3. Merging the Release PR triggers the publish job: tags (`<component>@vX.Y.Z`), GitHub releases, and conditional `npm publish` per package. Uses `NPM_TOKEN` automation token, no OTP. Core publishes first if its release was created.
 
 Things to know:
 
 - `bin` path in each package must be `dist/cli.js` — **no `./` prefix**. With `./`, npm strips the entire `bin` entry from the published tarball with only a warning. `npm pkg fix` normalizes this.
-- For `skill-graveyard`, the prepack/postpack scripts copy `.claude-plugin/`, `commands/`, `README.md`, `LICENSE` from repo root into the package dir at pack time. The publish workflow already invokes this. If `npm pack` errors mid-way during local debugging, `postpack` does NOT run — manually clean with `rm -rf packages/skill-graveyard/{.claude-plugin,commands,README.md,LICENSE}` if `git status` is dirty.
-- `mcp-graveyard` keeps its plugin assets INSIDE the package, no prepack hack.
-- **Skill-graveyard plugin version is NOT auto-synced.** The root `.claude-plugin/plugin.json` `version` field must be bumped by hand when bumping `packages/skill-graveyard/package.json`. Release-please used to sync via `extra-files` with a `../../` path, but release-please-action v4 rejects parent-directory traversal in `extra-files` paths ("illegal pathing characters"). Removed the broken config in skill-graveyard@0.9.0; durable fix (move `.claude-plugin/` and `commands/` from root into `packages/skill-graveyard/`) is a deferred follow-up.
-- `@skill-graveyard/core` has no plugin.json and no GitHub release per release-please config — internal-facing only.
+- For `skill-graveyard`, the prepack/postpack scripts copy `README.md`, `LICENSE` from repo root into the package dir at pack time (so the npm package displays the canonical README). If `npm pack` errors mid-way during local debugging, `postpack` does NOT run — manually clean with `rm -f packages/skill-graveyard/{README.md,LICENSE}` if `git status` is dirty.
+- `mcp-graveyard` ships its own README from inside the package, no prepack hack.
+- `@skill-graveyard/core` has no GitHub release per release-please config — internal-facing only.
+- **Marketplace-merged Release PRs need the autorelease label.** If you ever have to open a release PR manually (because the bot was blocked when it tried), copy the `autorelease: pending` label that release-please normally adds — without it, release-please won't recognize the merge as a release commit and won't create tags / GH releases / npm publishes.
 
 ### Manual fallback (emergency only)
 
 Use only if release-please is blocked and a release is urgent:
 
-1. Bump `version` in `packages/<name>/package.json` and (for skill-graveyard) `.claude-plugin/plugin.json` lockstep.
+1. Bump `version` in `packages/<name>/package.json` and `.release-please-manifest.json` lockstep. Add a `## [X.Y.Z]` section to `packages/<name>/CHANGELOG.md`.
 2. `npm publish --workspace=<name>` with an interactive OTP — ask the user to run `! npm publish --workspace=<name> --otp=NNNNNN` so the result lands in the conversation.
 3. `git tag -a <component>@vX.Y.Z` and push.
-4. release-please will resync its state on the next push.
+4. `gh release create <component>@vX.Y.Z` with notes from the CHANGELOG entry.
+5. release-please will resync its state on the next push.
 
 ### Docs site
 

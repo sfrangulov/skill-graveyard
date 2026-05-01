@@ -28,22 +28,13 @@ npm i -g mcp-graveyard
 mcp-graveyard
 ```
 
-Or as a Claude Code skill (auto-discovered by Claude in any session, via [skills.sh](https://skills.sh/)):
+Or as a Claude Code Agent Skill (auto-discovered by Claude in any session, via [skills.sh](https://skills.sh/)):
 
 ```sh
 npx skills add sfrangulov/skill-graveyard
 ```
 
-The skills.sh install adds a `SKILL.md` to your Claude Code skills directory; Claude picks it up automatically when you ask MCP-shaped questions ("which MCP servers don't I use?", "clean up MCP config"). The same command also installs the sister `skill-graveyard` skill from this repo. Compatible with the npm install — they don't conflict.
-
-Or as a Claude Code plugin (adds `/mcp-graveyard:run` and `/mcp-graveyard:audit-mcp-tools` slash commands). Run inside Claude Code:
-
-```
-/plugin marketplace add sfrangulov/skill-graveyard
-/plugin install mcp-graveyard@graveyard
-```
-
-After install, run `/reload-plugins` to pick up the new slash commands in the current session. The same marketplace also exposes `skill-graveyard` (`/plugin install skill-graveyard@graveyard`).
+The skills.sh install adds a `SKILL.md` to your Claude Code skills directory; Claude picks it up automatically when you ask MCP-shaped questions ("which MCP servers don't I use?", "clean up MCP config") and runs the same `npx mcp-graveyard` binary under the hood. The same command also installs the sister `skill-graveyard` skill from this repo. Compatible with the npm install — they don't conflict.
 
 Requires Node 18+.
 
