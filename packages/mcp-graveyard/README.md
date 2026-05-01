@@ -40,10 +40,10 @@ Or as a Claude Code plugin (adds `/mcp-graveyard:run` and `/mcp-graveyard:audit-
 
 ```
 /plugin marketplace add sfrangulov/skill-graveyard
-/plugin install mcp-graveyard@skill-graveyard
+/plugin install mcp-graveyard@graveyard
 ```
 
-After install, run `/reload-plugins` to pick up the new slash commands in the current session. The same marketplace also exposes `skill-graveyard` (`/plugin install skill-graveyard@skill-graveyard`).
+After install, run `/reload-plugins` to pick up the new slash commands in the current session. The same marketplace also exposes `skill-graveyard` (`/plugin install skill-graveyard@graveyard`).
 
 Requires Node 18+.
 
