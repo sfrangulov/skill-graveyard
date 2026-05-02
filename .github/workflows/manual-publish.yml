@@ -1,0 +1,37 @@
+name: manual-publish
+
+# One-shot manual publisher used to recover from the release-please publish-job failure
+# of 2026-05-02 (workspace lockfile drift after a minor core bump). Safe to delete after
+# core@0.2.0 and memory-graveyard@0.2.0 are confirmed on npm.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Workspace name to publish (e.g. @skill-graveyard/core, memory-graveyard)
+        required: true
+        type: choice
+        options:
+          - "@skill-graveyard/core"
+          - skill-graveyard
+          - mcp-graveyard
+          - memory-graveyard
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      WORKSPACE: ${{ inputs.package }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install
+      - name: Build core (always — others depend on its dist)
+        run: npm run build --workspace=@skill-graveyard/core
+      - name: Publish workspace
+        run: npm publish --workspace="$WORKSPACE" --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
