@@ -145,11 +145,11 @@ async function main() {
     if (args.json) {
       console.log(JSON.stringify({ plan, applied: args.apply }, null, 2));
     } else {
-      console.log(formatPruneReport(plan, { apply: args.apply }));
+      console.log(formatPruneReport(plan, { apply: args.apply, color: process.stdout.isTTY ?? false }));
     }
     if (!args.apply) return;
     const result = await applyPrune(audit.memoryDir, plan);
-    if (!args.json) console.log(formatApplyResult(result));
+    if (!args.json) console.log(formatApplyResult(result, { color: process.stdout.isTTY ?? false }));
     if (result.failed.length > 0) process.exit(1);
     return;
   }
