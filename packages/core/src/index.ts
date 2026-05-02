@@ -9,8 +9,9 @@ export {
   discoverInstalledSkills,
   discoverProjectScopedSkills,
   findGitRoot,
+  discoverMemoryDirs,
 } from "./discovery.js";
-export type { SkillSource, InstalledSkill } from "./discovery.js";
+export type { SkillSource, InstalledSkill, MemoryDir } from "./discovery.js";
 
 export { findSessionFiles, parseSession, parseToolCalls } from "./parser.js";
 export type { SkillCall, ToolCallBase, ToolUseItem } from "./parser.js";

@@ -4,7 +4,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverProjectScopedSkills, findGitRoot } from "./discovery.js";
+import { writeFile } from "node:fs/promises";
+import { discoverInstalledSkills, discoverProjectScopedSkills, findGitRoot, discoverMemoryDirs } from "./discovery.js";
 
 async function withTmpDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "sg-discovery-test-"));
@@ -118,4 +119,32 @@ test("findGitRoot stops at filesystem root if no .git found", () => {
   const found = findGitRoot("/tmp");
   // /tmp itself may or may not be in a git tree; the contract is "returns string or null".
   assert.ok(found === null || typeof found === "string");
+});
+
+test("discoverMemoryDirs returns one entry per project that has a memory/ subdir", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "mg-disc-"));
+  try {
+    const projectsDir = join(tmp, "projects");
+    await mkdir(join(projectsDir, "-Users-alice-projects-foo", "memory"), { recursive: true });
+    await writeFile(join(projectsDir, "-Users-alice-projects-foo", "memory", "MEMORY.md"), "");
+    await mkdir(join(projectsDir, "-Users-alice-projects-bar"), { recursive: true });
+    // bar has no memory/ subdir
+    await mkdir(join(projectsDir, "-Users-alice-projects-baz", "memory"), { recursive: true });
+    await writeFile(join(projectsDir, "-Users-alice-projects-baz", "memory", "MEMORY.md"), "");
+
+    const dirs = await discoverMemoryDirs(projectsDir);
+    const sorted = dirs.map((d) => d.projectKey).sort();
+    assert.deepStrictEqual(sorted, [
+      "-Users-alice-projects-baz",
+      "-Users-alice-projects-foo",
+    ]);
+    assert.ok(dirs[0]!.memoryDir.endsWith("/memory"));
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("discoverMemoryDirs returns [] when projectsDir is missing", async () => {
+  const dirs = await discoverMemoryDirs("/nonexistent/path/does/not/exist");
+  assert.deepStrictEqual(dirs, []);
 });
