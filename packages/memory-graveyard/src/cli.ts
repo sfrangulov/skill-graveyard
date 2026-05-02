@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { runAudit } from "./audit.js";
-import { formatAuditReport, formatAuditJson } from "./format.js";
+import { runLint } from "./lint.js";
+import { formatAuditReport, formatAuditJson, formatLintReport, formatLintJson } from "./format.js";
 import type { Bucket } from "./types.js";
 
 const VALID_BUCKETS: Bucket[] = ["active", "dead", "missing", "hallucinated"];
@@ -111,7 +112,22 @@ async function main() {
     console.log(formatAuditReport(report, { color: process.stdout.isTTY ?? false }));
     return;
   }
-  // lint / prune / projects wired in later tasks
+  if (args.subcommand === "lint") {
+    const report = await runLint({
+      claudeDir: args.claudeDir,
+      projectKey: args.project,
+      truncationCutoff: args.truncationCutoff,
+      staleDays: args.staleDays,
+    });
+    if (args.json) {
+      console.log(formatLintJson(report));
+    } else {
+      console.log(formatLintReport(report, { color: process.stdout.isTTY ?? false }));
+    }
+    if (!report.summary.ok) process.exit(1);
+    return;
+  }
+  // prune / projects wired in later tasks
   die(`subcommand "${args.subcommand}" not yet implemented`);
 }
 
