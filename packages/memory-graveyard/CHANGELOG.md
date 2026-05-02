@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/sfrangulov/skill-graveyard/compare/memory-graveyard@v0.2.0...memory-graveyard@v0.2.1) (2026-05-02)
+
+
+### Bug Fixes
+
+* **memory-graveyard:** align table columns and colorize output ([611a3e2](https://github.com/sfrangulov/skill-graveyard/commit/611a3e29ae8d9a35a7a6882a4ea0e905ef0d6345))
+* **memory-graveyard:** enable color in prune CLI output ([ff2a9f6](https://github.com/sfrangulov/skill-graveyard/commit/ff2a9f68a3a3cc813dcafc45adaeb69da74984ad))
+
 ## [0.2.0](https://github.com/sfrangulov/skill-graveyard/compare/memory-graveyard@v0.1.0...memory-graveyard@v0.2.0) (2026-05-02)
 
 
