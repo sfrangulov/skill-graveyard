@@ -36,7 +36,10 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      - run: npm ci
+      # Use `npm install` (not `npm ci`) so version bumps in release-please's
+      # PR don't have to round-trip through a lockfile refresh — release-please
+      # doesn't update package-lock.json when it bumps workspace versions.
+      - run: npm install
       - name: Build core (always — others depend on its dist)
         run: npm run build --workspace=@skill-graveyard/core
 
