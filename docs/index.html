@@ -414,7 +414,7 @@ footer a:hover{color:var(--accent);border-bottom-color:var(--accent-soft)}
 <div class="wrap">
 
   <div class="topline">
-    <span>skill-graveyard / <span class="ver" data-pkg="skill-graveyard">…</span> · mcp-graveyard / <span class="ver" data-pkg="mcp-graveyard">…</span></span>
+    <span>skill-graveyard / <span class="ver" data-pkg="skill-graveyard">…</span> · mcp-graveyard / <span class="ver" data-pkg="mcp-graveyard">…</span> · memory-graveyard / <span class="ver" data-pkg="memory-graveyard">…</span></span>
     <span class="right">
       <a href="https://github.com/sfrangulov/skill-graveyard">github ↗</a>
       <a href="https://www.npmjs.com/package/skill-graveyard">npm ↗</a>
@@ -892,6 +892,143 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
     <p style="margin-top: 2rem;"><a href="https://github.com/sfrangulov/skill-graveyard/blob/main/packages/mcp-graveyard/README.md">Full docs and subcommand reference →</a></p>
   </section>
 
+  <!-- ── 07 ───────────────────────────────────── -->
+  <section class="reveal" id="memory-graveyard">
+    <p class="section-head"><span class="num">07</span> companion</p>
+    <h2>Same four buckets, applied to memory.</h2>
+
+    <p class="lead">Same four-bucket model, applied to per-project file-based memory — the <code>MEMORY.md</code> index + <code>memory/*.md</code> entries that auto-load into Claude's system prompt. Surfaces dead entries, broken pointers, and (uniquely) entries below the truncation cutoff that Claude can't see until you ask for them.</p>
+
+    <div class="install">
+      <div class="path">
+        <span class="label">one-off</span>
+        <p class="desc">Same install pattern as skill-graveyard.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx memory-graveyard@latest</span><button data-copy="npx memory-graveyard@latest" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">global cli</span>
+        <p class="desc">Installs the binary on your <code>PATH</code>.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npm i -g memory-graveyard</span><button data-copy="npm i -g memory-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">skills.sh</span>
+        <p class="desc">Install as an Agent Skill — Claude auto-discovers it in any session. Same command also installs <code>skill-graveyard</code> and <code>mcp-graveyard</code>.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx skills add sfrangulov/skill-graveyard</span><button data-copy="npx skills add sfrangulov/skill-graveyard" type="button">copy</button></div>
+      </div>
+      <div class="path">
+        <span class="label">subcommands</span>
+        <p class="desc">Four subcommands mirror the mcp-graveyard surface.</p>
+        <div class="cmdblock"><span class="prompt">$</span><span class="cmd">npx memory-graveyard@latest lint</span><button data-copy="npx memory-graveyard@latest lint" type="button">copy</button></div>
+      </div>
+    </div>
+
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">audit</span>
+        <span class="sig">[--days N] [--only active|dead|missing|hallucinated] [--json]</span>
+      </div>
+      <p>Default command. Reads the project's <code>MEMORY.md</code> index and cross-references every <code>memory/*.md</code> file against session logs to sort entries into the four buckets — active (indexed and read successfully), dead (indexed but never read), missing (read but not indexed), hallucinated (read and errored). Includes per-entry line numbers for pinpoint triage.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ memory-graveyard --days 30</span></div>
+<pre><span class="h">memory-graveyard</span> <span class="mt">— 30 days · 14 entries indexed · 16 on disk · 53 reads · 47 succeeded · 6 errored</span>
+
+<span class="a">ACTIVE (4)</span>  <span class="mt">indexed and read — keep</span>
+  entry                             reads  errors  last         line
+  feedback_release_flow.md          18     0       2026-05-02   12
+  project_clientco_platform.md       9     0       2026-05-01   10
+  feedback_subagent_models.md        8     0       2026-04-30    8
+  project_skill_graveyard.md        12     0       2026-04-29    6
+
+<span class="d">DEAD (8)</span>  <span class="mt">indexed, 0 reads in 30d — removal candidates</span>
+  arch_decisions_2025.md             0     0       —             3
+  onboarding_notes.md                0     0       —            14
+  retro_q1.md                        0     0       —            20
+
+<span class="y">HALLUCINATED (2)</span>  <span class="mt">entry read but errored — file missing or pointer broken</span>
+  feedback_doesnotexist.md           0     2       2026-04-15   34
+  <span class="rl">→ memory-graveyard lint</span>    <i>for static checks including broken pointers</i>
+
+<span class="m">MISSING (2)</span>  <span class="mt">on disk but not indexed in MEMORY.md — orphan files</span>
+  scratch_20260410.md                1     0       2026-04-10    —
+  <span class="rl">→ memory-graveyard lint</span>    <i>for actionable classification</i>
+
+<span class="rl">→ run: memory-graveyard prune</span>  <i>to clear DEAD entries and broken pointers</i>
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">lint</span>
+        <span class="sig">[--json]</span>
+      </div>
+      <p>Five static checks: broken pointers (indexed entries whose files are missing), orphan files (on-disk entries not in the index), truncation budget (entries that fall below Claude's context window cutoff and are invisible until explicitly requested), index size (total token weight of all indexed entries), and stale dated entries (entries with an embedded date header older than 90 days). Exit code 1 if any check fails.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ memory-graveyard lint</span></div>
+<pre><span class="h">memory-graveyard lint</span>
+
+<span class="d">BROKEN_POINTER (1)</span>
+  feedback_doesnotexist.md   <span class="mt">— indexed at line 34 but file not found on disk</span>
+
+<span class="y">TRUNCATION_BUDGET (3)</span>
+  arch_decisions_2025.md     <span class="mt">— 4 312 tok, starts at token 94 208 of 100 000 limit</span>
+  onboarding_notes.md        <span class="mt">— 2 107 tok, starts at token 96 320 of 100 000 limit</span>
+  retro_q1.md                <span class="mt">— 1 844 tok, starts at token 98 427 of 100 000 limit</span>
+
+<span class="mt">INDEX_SIZE</span>  <span class="mt">total 98 271 tok — within budget (limit 100 000)</span>
+
+<span class="mt">OK  ORPHAN (0)    STALE_DATE (0)</span>
+
+<span class="rl">→ run: memory-graveyard prune</span>  <i>to fix broken pointers and remove dead entries</i>
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">prune</span>
+        <span class="sig">[--apply] [--only &lt;entry&gt;] [--days N]</span>
+      </div>
+      <p>Reads the audit and emits a removal plan for DEAD entries and broken pointers. Print-only by default. <code>--apply</code> writes a snapshot backup of the full <code>memory/</code> directory to <code>~/.claude/memory-graveyard-backup/&lt;ISO&gt;/</code>, then removes the dead entries from <code>MEMORY.md</code> and deletes the corresponding <code>.md</code> files. Continues on individual failures.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ memory-graveyard prune</span></div>
+<pre><span class="h">memory-graveyard prune</span> <span class="mt">— plan: 8 entries to remove (0 reads in 30 days)</span>
+
+  arch_decisions_2025.md            remove from MEMORY.md + delete file
+  onboarding_notes.md               remove from MEMORY.md + delete file
+  retro_q1.md                       remove from MEMORY.md + delete file
+  feedback_doesnotexist.md          remove broken pointer from MEMORY.md
+
+<span class="mt">re-run with --apply to execute (snapshot backup is automatic)</span>
+</pre>
+      </div>
+    </article>
+
+    <article class="subcmd">
+      <div class="head">
+        <span class="name">projects</span>
+        <span class="sig">[--days N] [--json]</span>
+      </div>
+      <p>Cross-project sweep. Groups every memory read by the <code>cwd</code> recorded in the session log and surfaces the per-project memory health — active entries, dead weight, and truncation pressure — across all projects in <code>~/.claude/projects/</code>.</p>
+      <div class="terminal">
+        <div class="bar"><div class="dots"><span></span><span></span><span></span></div><span>~ $ memory-graveyard projects</span></div>
+<pre><span class="h">~/projects/client-analytics</span>  <span class="mt">12 entries indexed · 39 reads · 4 dead · 0 hallucinated</span>
+    feedback_release_flow.md     18×
+    project_skill_graveyard.md   12×
+
+<span class="h">~/projects/clientco/web-platform</span>  <span class="mt">8 entries indexed · 4 reads · 6 dead · 2 hallucinated</span>
+  <span class="d">✗</span> feedback_doesnotexist.md    2× <span class="d">(2 hallucinated)</span>
+
+<span class="h">~/projects/landing</span>  <span class="mt">3 entries indexed · 0 reads · 3 dead · 0 hallucinated</span>
+  <span class="d">all 3 entries dead — consider clearing this project's memory</span>
+</pre>
+      </div>
+    </article>
+
+    <p style="margin-top: 2rem;"><a href="https://github.com/sfrangulov/skill-graveyard/blob/main/packages/memory-graveyard/README.md">Full docs and subcommand reference →</a></p>
+  </section>
+
   <!--
   FEATURED-IN strip — uncomment and fill once mentions land.
   Track sources in /MENTIONS.md, then promote the noteworthy ones here.
@@ -907,7 +1044,7 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
   -->
 
   <footer>
-    <span>skill-graveyard <span class="ver" data-pkg="skill-graveyard">…</span> + mcp-graveyard <span class="ver" data-pkg="mcp-graveyard">…</span> · MIT · 2026</span>
+    <span>skill-graveyard <span class="ver" data-pkg="skill-graveyard">…</span> + mcp-graveyard <span class="ver" data-pkg="mcp-graveyard">…</span> + memory-graveyard <span class="ver" data-pkg="memory-graveyard">…</span> · MIT · 2026</span>
     <span>built by <a href="https://github.com/sfrangulov">Sergei Frangulov</a></span>
     <span><a href="https://github.com/sfrangulov/skill-graveyard">github.com/sfrangulov/skill-graveyard</a></span>
   </footer>
