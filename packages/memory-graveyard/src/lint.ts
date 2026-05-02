@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { resolveClaudePaths } from "@skill-graveyard/core";
+import { resolveClaudePaths, estimateTokens } from "@skill-graveyard/core";
 import { parseMemoryIndex } from "./index_parser.js";
 import { scanEntryFiles } from "./entry_scanner.js";
 import type { LintOptions, LintReport, LintFinding } from "./types.js";
@@ -50,7 +50,17 @@ export async function runLint(opts: LintOptions): Promise<LintReport> {
     });
   }
 
-  // Checks #4, #5 added by subsequent tasks.
+  // #4 — index size
+  const tokens = estimateTokens(indexContent);
+  const threshold = 5000;
+  const over = tokens > threshold;
+  findings.push({
+    check: "index-size",
+    severity: over ? "warning" : "info",
+    details: { tokens, threshold, over },
+  });
+
+  // Check #5 added by subsequent task.
 
   const errors = findings.filter((f) => f.severity === "error").length;
   const warnings = findings.filter((f) => f.severity === "warning").length;
@@ -58,7 +68,7 @@ export async function runLint(opts: LintOptions): Promise<LintReport> {
     generatedAt: new Date().toISOString(),
     memoryDir,
     findings,
-    summary: { errors, warnings, ok: findings.length === 0 },
+    summary: { errors, warnings, ok: errors === 0 && warnings === 0 },
   };
 }
 

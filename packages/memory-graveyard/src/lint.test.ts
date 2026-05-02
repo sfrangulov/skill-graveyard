@@ -115,3 +115,30 @@ test("lint #3 omits the finding when cutOff == 0", async () => {
     await rm(tmp, { recursive: true, force: true });
   }
 });
+
+test("lint #4 always emits an index-size finding (info or warning)", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "mg-lint-size-"));
+  try {
+    const { claudeDir } = await buildLintFixture(
+      tmp,
+      "-p",
+      `# x\n\n- [E1](e1.md) — n\n`,
+      { "e1.md": "b" },
+    );
+    const report = await runLint({
+      claudeDir,
+      projectKey: "-p",
+      truncationCutoff: 200,
+      staleDays: 30,
+    });
+    const size = report.findings.find((f) => f.check === "index-size");
+    assert.ok(size, "expected an index-size finding");
+    const d = size.details as { tokens: number; threshold: number; over: boolean };
+    assert.ok(d.tokens > 0);
+    assert.equal(d.threshold, 5000);
+    assert.equal(d.over, false);
+    assert.equal(size.severity, "info");
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
