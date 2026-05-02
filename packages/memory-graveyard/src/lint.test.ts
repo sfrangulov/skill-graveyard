@@ -142,3 +142,37 @@ test("lint #4 always emits an index-size finding (info or warning)", async () =>
     await rm(tmp, { recursive: true, force: true });
   }
 });
+
+test("lint #5 flags stale type:project entries; ignores other types", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "mg-lint-stale-"));
+  try {
+    const oldDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const recentDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const { claudeDir } = await buildLintFixture(
+      tmp,
+      "-p",
+      `# x\n\n- [Old](old.md) — n\n- [Recent](recent.md) — n\n- [FB](fb.md) — n\n`,
+      {
+        "old.md":
+          `---\nname: old\ntype: project\n---\n\nDate: ${oldDate}\n`,
+        "recent.md":
+          `---\nname: recent\ntype: project\n---\n\nDate: ${recentDate}\n`,
+        "fb.md":
+          `---\nname: fb\ntype: feedback\n---\n\nDate: ${oldDate}\n`,
+      },
+    );
+    const report = await runLint({
+      claudeDir,
+      projectKey: "-p",
+      truncationCutoff: 200,
+      staleDays: 30,
+    });
+    const stale = report.findings.find((f) => f.check === "stale-dated");
+    assert.ok(stale, "expected a stale-dated finding");
+    const list = stale.details as { basename: string; lastDate: string; daysAgo: number }[];
+    assert.equal(list.length, 1);
+    assert.equal(list[0]!.basename, "old.md");
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});

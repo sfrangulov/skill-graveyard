@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveClaudePaths, estimateTokens } from "@skill-graveyard/core";
 import { parseMemoryIndex } from "./index_parser.js";
-import { scanEntryFiles } from "./entry_scanner.js";
+import { scanEntryFiles, readEntryBody } from "./entry_scanner.js";
 import type { LintOptions, LintReport, LintFinding } from "./types.js";
 
 export async function runLint(opts: LintOptions): Promise<LintReport> {
@@ -60,7 +60,32 @@ export async function runLint(opts: LintOptions): Promise<LintReport> {
     details: { tokens, threshold, over },
   });
 
-  // Check #5 added by subsequent task.
+  // #5 — stale dated project entries
+  const dateRe = /\b20\d{2}-\d{2}-\d{2}\b/g;
+  const cutoff = Date.now() - opts.staleDays * 24 * 60 * 60 * 1000;
+  const staleList: { basename: string; lastDate: string; daysAgo: number }[] = [];
+  for (const e of entries) {
+    if (e.frontmatter?.type !== "project") continue;
+    let body: string;
+    try {
+      body = await readEntryBody(e.path);
+    } catch {
+      continue;
+    }
+    const matches = body.match(dateRe);
+    if (!matches || matches.length === 0) continue;
+    const sorted = [...matches].sort();
+    const lastDate = sorted[sorted.length - 1]!;
+    const ts = Date.parse(lastDate + "T00:00:00Z");
+    if (!Number.isFinite(ts)) continue;
+    if (ts < cutoff) {
+      const daysAgo = Math.floor((Date.now() - ts) / (24 * 60 * 60 * 1000));
+      staleList.push({ basename: e.basename, lastDate, daysAgo });
+    }
+  }
+  if (staleList.length > 0) {
+    findings.push({ check: "stale-dated", severity: "warning", details: staleList });
+  }
 
   const errors = findings.filter((f) => f.severity === "error").length;
   const warnings = findings.filter((f) => f.severity === "warning").length;
