@@ -34,7 +34,23 @@ export async function runLint(opts: LintOptions): Promise<LintReport> {
     findings.push({ check: "orphans", severity: "warning", details: orphanList });
   }
 
-  // Checks #3, #4, #5 added by subsequent tasks.
+  // #3 — truncation budget
+  const cutOff = pointers.filter((p) => !p.visible);
+  if (cutOff.length > 0) {
+    findings.push({
+      check: "truncation-budget",
+      severity: "warning",
+      details: {
+        total: pointers.length,
+        visible: pointers.length - cutOff.length,
+        cutOff: cutOff.length,
+        cutoff: opts.truncationCutoff,
+        sample: cutOff.slice(0, 5).map((p) => ({ line: p.line, target: p.target, title: p.title })),
+      },
+    });
+  }
+
+  // Checks #4, #5 added by subsequent tasks.
 
   const errors = findings.filter((f) => f.severity === "error").length;
   const warnings = findings.filter((f) => f.severity === "warning").length;
