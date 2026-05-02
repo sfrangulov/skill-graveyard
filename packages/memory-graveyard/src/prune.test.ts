@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planPrune } from "./prune.js";
+import { mkdtemp, mkdir, writeFile, readFile, readdir, stat, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { planPrune, applyPrune } from "./prune.js";
 import type { AuditReport, EntryReport, LintReport } from "./types.js";
 
 const baseReport: AuditReport = {
@@ -101,4 +105,63 @@ test("planPrune respects --exclude", () => {
     exclude: new Set(["d1.md"]),
   });
   assert.deepEqual(plan.map((p) => p.basename), ["d2.md"]);
+});
+
+test("applyPrune snapshots, edits MEMORY.md, deletes files", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "mg-apply-"));
+  try {
+    await writeFile(
+      join(tmp, "MEMORY.md"),
+      `# x\n\n- [Keep](keep.md) — yes\n- [Drop](drop.md) — no\n- [Ghost](ghost.md) — gone\n`,
+    );
+    await writeFile(join(tmp, "keep.md"), "keep");
+    await writeFile(join(tmp, "drop.md"), "drop");
+    // ghost.md doesn't exist
+
+    const result = await applyPrune(tmp, [
+      { basename: "drop.md", reason: "dead", pointerLine: 4, fileExists: true },
+      { basename: "ghost.md", reason: "hallucinated", pointerLine: 5, fileExists: false },
+    ]);
+
+    assert.equal(result.deleted.length, 1);
+    assert.deepEqual(result.deleted, ["drop.md"]);
+    assert.equal(result.removedPointerLines.length, 2);
+    assert.equal(existsSync(join(tmp, "drop.md")), false);
+
+    const after = await readFile(join(tmp, "MEMORY.md"), "utf8");
+    assert.match(after, /\[Keep\]/);
+    assert.doesNotMatch(after, /\[Drop\]/);
+    assert.doesNotMatch(after, /\[Ghost\]/);
+
+    const backupRoot = join(tmp, ".graveyard-backup");
+    const backups = await readdir(backupRoot);
+    assert.equal(backups.length, 1);
+    const backupDir = join(backupRoot, backups[0]!);
+    assert.ok(existsSync(join(backupDir, "MEMORY.md")));
+    assert.ok(existsSync(join(backupDir, "drop.md")));
+    assert.ok(existsSync(join(backupDir, "manifest.json")));
+    const manifest = JSON.parse(await readFile(join(backupDir, "manifest.json"), "utf8"));
+    assert.equal(manifest.deletedFiles.length, 1);
+    assert.equal(manifest.removedPointerLines.length, 2);
+
+    const dirStat = await stat(backupDir);
+    assert.equal((dirStat.mode & 0o777).toString(8), "700");
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("applyPrune is idempotent on already-removed pointer lines", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "mg-apply-idem-"));
+  try {
+    await writeFile(join(tmp, "MEMORY.md"), `# x\n\n- [Keep](keep.md) — yes\n`);
+    await writeFile(join(tmp, "keep.md"), "k");
+    const result = await applyPrune(tmp, [
+      { basename: "missing.md", reason: "hallucinated", pointerLine: 99, fileExists: false },
+    ]);
+    assert.equal(result.deleted.length, 0);
+    assert.equal(result.removedPointerLines.length, 0);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
 });
