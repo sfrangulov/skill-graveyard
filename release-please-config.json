@@ -16,6 +16,10 @@
     "packages/mcp-graveyard": {
       "package-name": "mcp-graveyard",
       "component": "mcp-graveyard"
+    },
+    "packages/memory-graveyard": {
+      "package-name": "memory-graveyard",
+      "component": "memory-graveyard"
     }
   }
 }
