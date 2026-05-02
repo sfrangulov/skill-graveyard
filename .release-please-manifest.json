@@ -2,5 +2,5 @@
   "packages/core": "0.2.0",
   "packages/skill-graveyard": "0.10.0",
   "packages/mcp-graveyard": "0.3.0",
-  "packages/memory-graveyard": "0.2.0"
+  "packages/memory-graveyard": "0.2.1"
 }
