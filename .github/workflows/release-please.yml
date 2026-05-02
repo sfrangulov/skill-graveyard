@@ -17,6 +17,7 @@ jobs:
       core_released: ${{ steps.release.outputs['packages/core--release_created'] }}
       skill_released: ${{ steps.release.outputs['packages/skill-graveyard--release_created'] }}
       mcp_released: ${{ steps.release.outputs['packages/mcp-graveyard--release_created'] }}
+      memory_released: ${{ steps.release.outputs['packages/memory-graveyard--release_created'] }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -54,5 +55,11 @@ jobs:
       - name: Publish mcp-graveyard
         if: needs.release-please.outputs.mcp_released == 'true'
         run: npm publish --workspace=mcp-graveyard --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish memory-graveyard
+        if: needs.release-please.outputs.memory_released == 'true'
+        run: npm publish --workspace=memory-graveyard --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
