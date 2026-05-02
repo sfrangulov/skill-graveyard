@@ -1,4 +1,4 @@
-import type { AuditReport, EntryReport, Bucket, LintReport, LintFinding, PrunePlanItem } from "./types.js";
+import type { AuditReport, EntryReport, Bucket, LintReport, LintFinding, PrunePlanItem, ProjectMemorySummary } from "./types.js";
 import type { ApplyResult } from "./prune.js";
 
 interface FormatOptions {
@@ -190,4 +190,24 @@ export function formatApplyResult(result: ApplyResult): string {
     for (const f of result.failed) lines.push(`  ${f.basename}: ${f.error}`);
   }
   return lines.join("\n");
+}
+
+export function formatProjectsReport(stats: ProjectMemorySummary[], _opts: FormatOptions): string {
+  if (stats.length === 0) return "No memory dirs found across projects.";
+  const lines: string[] = [];
+  for (const s of stats) {
+    const cold = s.cold ? " ✗ COLD" : "";
+    const cwdDisplay = s.cwd ?? s.projectKey;
+    const last = s.lastTouchedAt ? s.lastTouchedAt.slice(0, 10) : "—";
+    lines.push(
+      `${pad(cwdDisplay, 50)} ${s.entryCount} entries · ${formatBytes(s.totalBytes)} · last touched ${last}  (${s.daysSinceTouch}d)${cold}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
