@@ -37,6 +37,39 @@ Reads `~/.claude.json` (`mcpServers` block) for the configured-server list and `
 
 See [packages/mcp-graveyard/README.md](packages/mcp-graveyard/README.md) for full docs.
 
+## Companion: memory-graveyard
+
+Same four-bucket model (active / dead / missing / hallucinated), applied to per-project file-based memory: the `MEMORY.md` index + `memory/*.md` entries that auto-load into the system prompt at session start.
+
+```sh
+npx memory-graveyard@latest             # audit current project's memory
+npx memory-graveyard@latest lint        # static checks (broken pointers, orphans,
+                                        #  truncation budget, index size, stale dates)
+npx memory-graveyard@latest prune       # plan removal; --apply executes with snapshot
+npx memory-graveyard@latest projects    # cross-project sweep — find cold memory dirs
+```
+
+Sample CLI output (anonymized — `clientco/web-platform` stands in for a real project):
+
+```
+memory-graveyard — 30 days · 14 entries indexed · 16 on disk · 53 reads · 47 succeeded · 6 errored
+
+ACTIVE (4)
+  entry                            reads   errors   last         line
+  feedback_release_flow.md         18      0        2026-05-02   12
+  ...
+
+DEAD (8) — candidates for removal
+  ...
+
+HALLUCINATED (2)
+  ...
+
+→ run: memory-graveyard prune  to clear DEAD entries and broken pointers
+```
+
+`lint` is the unique-to-memory check: it surfaces entries below the system-prompt truncation cutoff (default 200 lines) — the entries Claude can't see until you ask for them by name. All analysis is local; no network calls.
+
 ## Why this exists
 
 I had 65 skills installed across user, plugin, and agent paths. After parsing 30 days of my own session logs, I found Claude had actually invoked 14 of them. The other 51 were still loading their `description` strings into every API request — about 500K skill-metadata tokens over the window covering skills that were never called once. I built this so I could see the gap, and to surface a second signal I didn't expect: Claude regularly invokes built-in tool names (`Bash`, `Read`, `Edit`) as if they were skills, which the runtime then errors on. Same parser, both answers.

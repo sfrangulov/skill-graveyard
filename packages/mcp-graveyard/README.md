@@ -159,6 +159,11 @@ npx skill-graveyard
 
 Six subcommands including `cost` (token cost of skill metadata) and `outdated` (upstream version check). See [packages/skill-graveyard](../skill-graveyard/) or [npm](https://www.npmjs.com/package/skill-graveyard).
 
+## Companion tools
+
+- [`skill-graveyard`](https://www.npmjs.com/package/skill-graveyard) — same pattern for Claude Code skills (SKILL.md installs).
+- [`memory-graveyard`](https://www.npmjs.com/package/memory-graveyard) — same pattern for per-project `MEMORY.md` entries.
+
 ## License
 
 MIT
