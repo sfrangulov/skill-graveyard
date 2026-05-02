@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: ["@skill-graveyard/core", "skill-graveyard", "mcp-graveyard"]
+        package: ["@skill-graveyard/core", "skill-graveyard", "mcp-graveyard", "memory-graveyard"]
         node: [20, 22]
     steps:
       - uses: actions/checkout@v4
