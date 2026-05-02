@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { runAudit } from "./audit.js";
 import { runLint } from "./lint.js";
-import { formatAuditReport, formatAuditJson, formatLintReport, formatLintJson } from "./format.js";
+import { formatAuditReport, formatAuditJson, formatLintReport, formatLintJson, formatPruneReport, formatApplyResult } from "./format.js";
+import { planPrune, applyPrune } from "./prune.js";
 import type { Bucket } from "./types.js";
 
 const VALID_BUCKETS: Bucket[] = ["active", "dead", "missing", "hallucinated"];
@@ -127,7 +128,31 @@ async function main() {
     if (!report.summary.ok) process.exit(1);
     return;
   }
-  // prune / projects wired in later tasks
+  if (args.subcommand === "prune") {
+    const audit = await runAudit({
+      claudeDir: args.claudeDir,
+      windowDays: args.days,
+      projectKey: args.project,
+    });
+    const lint = await runLint({
+      claudeDir: args.claudeDir,
+      projectKey: args.project,
+      truncationCutoff: args.truncationCutoff,
+      staleDays: args.staleDays,
+    });
+    const plan = planPrune(audit, lint, { include: args.include, exclude: args.exclude });
+    if (args.json) {
+      console.log(JSON.stringify({ plan, applied: args.apply }, null, 2));
+    } else {
+      console.log(formatPruneReport(plan, { apply: args.apply }));
+    }
+    if (!args.apply) return;
+    const result = await applyPrune(audit.memoryDir, plan);
+    if (!args.json) console.log(formatApplyResult(result));
+    if (result.failed.length > 0) process.exit(1);
+    return;
+  }
+  // projects wired in later tasks
   die(`subcommand "${args.subcommand}" not yet implemented`);
 }
 

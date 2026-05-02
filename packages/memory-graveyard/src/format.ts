@@ -1,4 +1,5 @@
-import type { AuditReport, EntryReport, Bucket, LintReport, LintFinding } from "./types.js";
+import type { AuditReport, EntryReport, Bucket, LintReport, LintFinding, PrunePlanItem } from "./types.js";
+import type { ApplyResult } from "./prune.js";
 
 interface FormatOptions {
   color: boolean;
@@ -156,4 +157,37 @@ function renderFinding(f: LintFinding): string[] {
       return out;
     }
   }
+}
+
+export function formatPruneReport(plan: PrunePlanItem[], opts: { apply: boolean }): string {
+  if (plan.length === 0) {
+    return "memory-graveyard prune — nothing to do.";
+  }
+  const lines: string[] = [];
+  const fileCount = plan.filter((p) => p.fileExists).length;
+  const pointerCount = plan.filter((p) => p.pointerLine !== null).length;
+  lines.push("memory-graveyard prune — plan");
+  lines.push(`  ${fileCount} entry files to delete`);
+  lines.push(`  ${pointerCount} pointer lines to remove`);
+  lines.push("");
+  for (const item of plan) {
+    lines.push(`  [${item.reason.padEnd(16)}] ${item.basename}${item.pointerLine ? `  (line ${item.pointerLine})` : ""}`);
+  }
+  if (!opts.apply) {
+    lines.push("");
+    lines.push("re-run with --apply to execute (backup is automatic)");
+  }
+  return lines.join("\n");
+}
+
+export function formatApplyResult(result: ApplyResult): string {
+  const lines: string[] = [];
+  lines.push(`backup: ${result.backupDir}`);
+  lines.push(`deleted: ${result.deleted.length} files`);
+  lines.push(`pointer lines removed: ${result.removedPointerLines.length}`);
+  if (result.failed.length > 0) {
+    lines.push("failed:");
+    for (const f of result.failed) lines.push(`  ${f.basename}: ${f.error}`);
+  }
+  return lines.join("\n");
 }
