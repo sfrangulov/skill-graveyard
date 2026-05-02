@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile } from "node:fs/promises";
-import { discoverInstalledSkills, discoverProjectScopedSkills, findGitRoot, discoverMemoryDirs } from "./discovery.js";
+import { discoverProjectScopedSkills, findGitRoot, discoverMemoryDirs } from "./discovery.js";
 
 async function withTmpDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   const dir = await mkdtemp(join(tmpdir(), "sg-discovery-test-"));
