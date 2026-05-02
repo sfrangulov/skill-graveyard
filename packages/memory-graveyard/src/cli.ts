@@ -1,4 +1,76 @@
 #!/usr/bin/env node
+import { runAudit } from "./audit.js";
+import { formatAuditReport, formatAuditJson } from "./format.js";
+import type { Bucket } from "./types.js";
+
+const VALID_BUCKETS: Bucket[] = ["active", "dead", "missing", "hallucinated"];
+
+interface Args {
+  subcommand: "audit" | "lint" | "prune" | "projects";
+  days: number;
+  json: boolean;
+  only: Bucket | undefined;
+  claudeDir: string | undefined;
+  project: string | undefined;
+  apply: boolean;
+  include: { orphans: boolean; brokenPointers: boolean };
+  exclude: Set<string>;
+  truncationCutoff: number;
+  staleDays: number;
+  coldDays: number;
+}
+
+function parseArgs(argv: string[]): Args {
+  const args: Args = {
+    subcommand: "audit",
+    days: 30,
+    json: false,
+    only: undefined,
+    claudeDir: undefined,
+    project: undefined,
+    apply: false,
+    include: { orphans: false, brokenPointers: false },
+    exclude: new Set(),
+    truncationCutoff: 200,
+    staleDays: 30,
+    coldDays: 90,
+  };
+  let i = 0;
+  if (argv[i] && !argv[i]!.startsWith("--") && !argv[i]!.startsWith("-")) {
+    const sub = argv[i] as Args["subcommand"];
+    if (sub !== "audit" && sub !== "lint" && sub !== "prune" && sub !== "projects") {
+      die(`unknown subcommand: ${argv[i]}`);
+    }
+    args.subcommand = sub;
+    i++;
+  }
+  for (; i < argv.length; i++) {
+    const a = argv[i]!;
+    if (a === "--json") args.json = true;
+    else if (a === "--apply") args.apply = true;
+    else if (a === "--days") args.days = Number(argv[++i]);
+    else if (a === "--only") {
+      const v = argv[++i] as Bucket;
+      if (!VALID_BUCKETS.includes(v)) die(`--only must be one of ${VALID_BUCKETS.join("|")}`);
+      args.only = v;
+    } else if (a === "--claude-dir") args.claudeDir = argv[++i];
+    else if (a === "--project") args.project = argv[++i];
+    else if (a === "--include") {
+      const v = argv[++i]!;
+      for (const item of v.split(",")) {
+        if (item === "orphans") args.include.orphans = true;
+        else if (item === "broken-pointers") args.include.brokenPointers = true;
+        else die(`--include unknown value: ${item}`);
+      }
+    } else if (a === "--exclude") args.exclude.add(argv[++i]!);
+    else if (a === "--truncation-cutoff") args.truncationCutoff = Number(argv[++i]);
+    else if (a === "--stale-days") args.staleDays = Number(argv[++i]);
+    else if (a === "--cold-days") args.coldDays = Number(argv[++i]);
+    else if (a === "--help" || a === "-h") usage();
+    else die(`unknown flag: ${a}`);
+  }
+  return args;
+}
 
 const USAGE = `memory-graveyard — audit MEMORY.md entry usage
 
@@ -13,19 +85,34 @@ Usage:
   memory-graveyard projects [--cold-days N] [--json] [--claude-dir <path>]
 `;
 
+function usage(): never {
+  console.log(USAGE);
+  process.exit(0);
+}
+
 function die(msg: string): never {
   console.error(`memory-graveyard: ${msg}`);
   process.exit(2);
 }
 
 async function main() {
-  const argv = process.argv.slice(2);
-  if (argv.includes("--help") || argv.includes("-h")) {
-    console.log(USAGE);
-    process.exit(0);
+  const args = parseArgs(process.argv.slice(2));
+  if (args.subcommand === "audit") {
+    const report = await runAudit({
+      claudeDir: args.claudeDir,
+      windowDays: args.days,
+      only: args.only,
+      projectKey: args.project,
+    });
+    if (args.json) {
+      console.log(formatAuditJson(report));
+      return;
+    }
+    console.log(formatAuditReport(report, { color: process.stdout.isTTY ?? false }));
+    return;
   }
-  // Subsequent tasks add real subcommand routing here.
-  die("not implemented yet — implementation in progress");
+  // lint / prune / projects wired in later tasks
+  die(`subcommand "${args.subcommand}" not yet implemented`);
 }
 
 main().catch((err) => {
