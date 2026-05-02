@@ -1,4 +1,4 @@
-import type { AuditReport, EntryReport, Bucket } from "./types.js";
+import type { AuditReport, EntryReport, Bucket, LintReport, LintFinding } from "./types.js";
 
 interface FormatOptions {
   color: boolean;
@@ -81,4 +81,79 @@ function suffixFor(bucket: Bucket): string {
   if (bucket === "dead") return " — candidates for removal";
   if (bucket === "missing") return " — orphan files Claude found anyway";
   return "";
+}
+
+export function formatLintReport(report: LintReport, _opts: FormatOptions): string {
+  const lines: string[] = [];
+  lines.push(`memory-graveyard lint — ${report.memoryDir}`);
+  lines.push("");
+  for (const f of report.findings) {
+    lines.push(...renderFinding(f));
+    lines.push("");
+  }
+  if (report.findings.length === 0) {
+    lines.push("All checks passed.");
+  } else {
+    lines.push(
+      `Summary: ${report.summary.errors} errors, ${report.summary.warnings} warnings, ${
+        report.findings.filter((f) => f.severity === "info").length
+      } info`,
+    );
+  }
+  return lines.join("\n");
+}
+
+export function formatLintJson(report: LintReport): string {
+  return JSON.stringify(report, null, 2);
+}
+
+function renderFinding(f: LintFinding): string[] {
+  switch (f.check) {
+    case "broken-pointers": {
+      const list = f.details as { line: number; title: string; target: string }[];
+      const out = [`Broken pointers (${list.length}):`];
+      for (const x of list) out.push(`  line ${x.line}   ${x.target}   referenced as "${x.title}"`);
+      return out;
+    }
+    case "orphans": {
+      const list = f.details as { basename: string; bytes: number }[];
+      const out = [`Orphan files (${list.length}) — present on disk, missing from MEMORY.md:`];
+      for (const x of list) out.push(`  ${x.basename}   ${x.bytes} bytes`);
+      return out;
+    }
+    case "truncation-budget": {
+      const d = f.details as {
+        total: number;
+        visible: number;
+        cutOff: number;
+        cutoff: number;
+        sample: { line: number; title: string; target: string }[];
+      };
+      const out = [
+        `Truncation budget — cutoff: ${d.cutoff} lines`,
+        `  Total entries:        ${d.total}`,
+        `  Visible to Claude:    ${d.visible}`,
+        `  Cut off (lines ${d.cutoff + 1}+): ${d.cutOff}`,
+      ];
+      if (d.sample.length > 0) {
+        out.push("");
+        out.push("  Below the cutoff (sample):");
+        for (const s of d.sample) out.push(`    line ${s.line}   ${s.target}   "${s.title}"`);
+      }
+      return out;
+    }
+    case "index-size": {
+      const d = f.details as { tokens: number; threshold: number; over: boolean };
+      return [
+        `Index size — ${d.tokens} tokens (cl100k_base; 5–15% drift vs Claude tokenizer)`,
+        `  Status: ${d.over ? `OVER (> ${d.threshold} tokens)` : `OK (< ${d.threshold} tokens)`}`,
+      ];
+    }
+    case "stale-dated": {
+      const list = f.details as { basename: string; lastDate: string; daysAgo: number }[];
+      const out = [`Stale project entries (${list.length}) — last referenced date older than the threshold:`];
+      for (const x of list) out.push(`  ${x.basename}   last date ${x.lastDate} (${x.daysAgo} days ago)`);
+      return out;
+    }
+  }
 }
