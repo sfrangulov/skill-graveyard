@@ -189,6 +189,31 @@ function dedupeByInvokeName(items: InstalledSkill[]): InstalledSkill[] {
   return [...seen.values()];
 }
 
+export interface MemoryDir {
+  projectKey: string;
+  memoryDir: string;
+}
+
+export async function discoverMemoryDirs(projectsDir: string): Promise<MemoryDir[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(projectsDir);
+  } catch {
+    return [];
+  }
+  const out: MemoryDir[] = [];
+  for (const projectKey of entries) {
+    const memoryDir = join(projectsDir, projectKey, "memory");
+    try {
+      const s = await stat(memoryDir);
+      if (s.isDirectory()) out.push({ projectKey, memoryDir });
+    } catch {
+      continue;
+    }
+  }
+  return out;
+}
+
 /** Walks up from `start`, returns the first directory containing a `.git` entry, or null. */
 export function findGitRoot(start: string): string | null {
   let cur = start;
