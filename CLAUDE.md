@@ -18,7 +18,8 @@ This is an npm workspaces monorepo:
 - `packages/core/` — `@skill-graveyard/core` (published). Shared parser, discovery, paths, tokenizer, known_tools. Generic `parseToolCalls<T>` lets sister CLIs reuse the JSONL stream.
 - `packages/skill-graveyard/` — published as `skill-graveyard`. CLI, all subcommand implementations (`audit`, `prune`, `suggest`, `projects`, `cost`, `outdated`), `format.ts`.
 - `packages/mcp-graveyard/` — published as `mcp-graveyard`. CLI for auditing MCP server tool usage. Mirrors skill-graveyard's bucket model (active/dead/missing/hallucinated) but for MCP servers.
-- `skills/skill-graveyard/SKILL.md`, `skills/mcp-graveyard/SKILL.md` — Agent Skill manifests for [skills.sh](https://skills.sh/). Discovered when users run `npx skills add sfrangulov/skill-graveyard`. NOT shipped in any npm tarball — read directly from the GitHub repo.
+- `packages/memory-graveyard/` — published as `memory-graveyard`. CLI auditing per-project `MEMORY.md` index + `memory/*.md` entries. v1 surface: `audit`, `lint`, `prune`, `projects`. Same monorepo conventions; no plugin distribution.
+- `skills/skill-graveyard/SKILL.md`, `skills/mcp-graveyard/SKILL.md`, `skills/memory-graveyard/SKILL.md` — Agent Skill manifests for [skills.sh](https://skills.sh/). Discovered when users run `npx skills add sfrangulov/skill-graveyard`. NOT shipped in any npm tarball — read directly from the GitHub repo.
 - `release-please-config.json`, `.release-please-manifest.json` — release-please configuration (per-package settings, current version baseline). See the Release section below.
 - `.github/workflows/release-please.yml` — automated release workflow (open Release PR on push to main, publish + tag + GH release on PR merge).
 - `docs/` — Pages site (`docs/index.html`) and design specs (`docs/specs/`).
@@ -58,6 +59,7 @@ These look like missing features. Verify with the user before "fixing":
 - No telemetry. No network calls anywhere in the runtime. `README.md` promises "all analysis is local" — keep it true.
 - The `cost` subcommand uses `cl100k_base` BPE as a proxy for Claude's tokenizer (Anthropic doesn't publish one for Claude 3+). User-facing output must keep the 5–15% drift disclaimer.
 - **No Claude Code plugin / slash commands.** We tried, then removed in skill-graveyard@0.10.0 / mcp-graveyard@0.3.0. The plugin layout repeatedly collided with skills.sh-bundled SKILLs in the `/<plugin>:` namespace and the autocomplete UX never landed cleanly. If reintroducing, the SKILL files in `skills/` MUST stay outside the plugin's auto-scanned paths (Claude Code's plugin loader picks up `<plugin-root>/skills/` automatically), or the namespace collision will reappear.
+- **`prune --apply` semantics differ across the three CLIs by design.** `mcp-graveyard prune --apply` and `memory-graveyard prune --apply` both execute (with backups), because they operate on files we own. `skill-graveyard prune` only prints removal commands — disabling installed skills/plugins requires invoking Claude Code's runtime (`claude /plugin remove`), which is fragile from outside CC. Don't "fix" this divergence to match — the asymmetry is the right answer.
 
 ## Release
 
@@ -95,7 +97,7 @@ The Pages site (<https://sfrangulov.github.io/skill-graveyard/>) deploys automat
 
 ### CI
 
-`.github/workflows/ci.yml` runs `typecheck`, `test`, `build` per workspace via a 6-cell matrix: `{@skill-graveyard/core, skill-graveyard, mcp-graveyard} × {Node 20, Node 22}`. **`fail-fast: false`** — one cell's failure does not cancel the others. Before skill-graveyard's typecheck/test/build runs, a conditional step builds `@skill-graveyard/core` first (skill-graveyard imports types from `packages/core/dist/`).
+`.github/workflows/ci.yml` runs `typecheck`, `test`, `build` per workspace via an 8-cell matrix: `{@skill-graveyard/core, skill-graveyard, mcp-graveyard, memory-graveyard} × {Node 20, Node 22}`. **`fail-fast: false`** — one cell's failure does not cancel the others. Before any CLI's typecheck/test/build runs, a conditional step builds `@skill-graveyard/core` first (the CLIs import types from `packages/core/dist/`).
 
 ## Conventions
 
