@@ -93,14 +93,17 @@ a:hover{border-bottom-color:var(--accent)}
 /* ── Header ─────────────────────────────────────── */
 
 .topline{
-  display:flex;justify-content:space-between;gap:1rem;
+  display:flex;justify-content:space-between;gap:1rem 1.5rem;
+  flex-wrap:wrap;
   font-size:.78rem;color:var(--muted);
   border-bottom:1px solid var(--line);
   padding-bottom:.6rem;margin-bottom:3rem;
   letter-spacing:.04em;
   text-transform:uppercase;
 }
-.topline span{white-space:nowrap}
+.topline .left{display:flex;flex-wrap:wrap;gap:.4rem 1rem}
+.topline .left .pkg{white-space:nowrap}
+.topline .left .pkg:not(:last-child)::after{content:" ·";margin-left:.4rem;color:var(--line)}
 .topline .right{display:flex;gap:1.25rem;flex-wrap:wrap}
 .topline .right a{color:var(--muted);border-bottom-color:transparent}
 .topline .right a:hover{color:var(--text);border-bottom-color:var(--text)}
@@ -414,7 +417,11 @@ footer a:hover{color:var(--accent);border-bottom-color:var(--accent-soft)}
 <div class="wrap">
 
   <div class="topline">
-    <span>skill-graveyard / <span class="ver" data-pkg="skill-graveyard">…</span> · mcp-graveyard / <span class="ver" data-pkg="mcp-graveyard">…</span> · memory-graveyard / <span class="ver" data-pkg="memory-graveyard">…</span></span>
+    <span class="left">
+      <span class="pkg">skill-graveyard / <span class="ver" data-pkg="skill-graveyard">…</span></span>
+      <span class="pkg">mcp / <span class="ver" data-pkg="mcp-graveyard">…</span></span>
+      <span class="pkg">memory / <span class="ver" data-pkg="memory-graveyard">…</span></span>
+    </span>
     <span class="right">
       <a href="https://github.com/sfrangulov/skill-graveyard">github ↗</a>
       <a href="https://www.npmjs.com/package/skill-graveyard">npm ↗</a>
@@ -1044,7 +1051,7 @@ plan: <span class="x">26 unlinks</span>, <span class="x">4 plugin removals</span
   -->
 
   <footer>
-    <span>skill-graveyard <span class="ver" data-pkg="skill-graveyard">…</span> + mcp-graveyard <span class="ver" data-pkg="mcp-graveyard">…</span> + memory-graveyard <span class="ver" data-pkg="memory-graveyard">…</span> · MIT · 2026</span>
+    <span>skill-graveyard <span class="ver" data-pkg="skill-graveyard">…</span> + mcp <span class="ver" data-pkg="mcp-graveyard">…</span> + memory <span class="ver" data-pkg="memory-graveyard">…</span> · MIT · 2026</span>
     <span>built by <a href="https://github.com/sfrangulov">Sergei Frangulov</a></span>
     <span><a href="https://github.com/sfrangulov/skill-graveyard">github.com/sfrangulov/skill-graveyard</a></span>
   </footer>
