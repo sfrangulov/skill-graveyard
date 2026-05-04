@@ -40,12 +40,18 @@ export function formatAuditJson(report: AuditReport): string {
   );
 }
 
-export function formatAuditReport(report: AuditReport, opts: FormatOptions): string {
+// Returns the audit split into sections (headline, then one block per non-empty
+// bucket, then an optional prune hint) so the CLI can stream them with pauses.
+// Each entry is multi-line content with no trailing newline.
+export function formatAuditReportSections(
+  report: AuditReport,
+  opts: FormatOptions,
+): string[] {
   const c = (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
-  const lines: string[] = [];
+  const sections: string[] = [];
 
   // Headline
-  lines.push(
+  sections.push(
     c(C.bold, `mcp-graveyard`) +
       c(C.dim, ` — ${report.windowDays} days · `) +
       `${report.summary.configuredServers} servers configured · ` +
@@ -53,10 +59,8 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
       c(C.green, `${report.summary.successfulCalls} succeeded`) +
       ` · ` +
       c(C.red, `${report.summary.erroredCalls} errored`),
-    "",
   );
 
-  // Group by bucket
   const byBucket = new Map<McpBucket, McpServerSummary[]>();
   for (const row of report.rows) {
     if (!byBucket.has(row.bucket)) byBucket.set(row.bucket, []);
@@ -67,21 +71,28 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
   for (const bucket of bucketOrder) {
     const rows = byBucket.get(bucket) ?? [];
     if (rows.length === 0) continue;
+    const lines: string[] = [];
     lines.push(c(C.bold, `${bucket.toUpperCase()} (${rows.length})`));
     const nameW = Math.max(...rows.map((r) => r.name.length));
-    const statsList = rows.map((r) => `${r.toolsSeen} tools, ${r.toolsInvoked.length} invoked, ${r.totalCalls} calls`);
+    const statsList = rows.map(
+      (r) => `${r.toolsSeen} tools, ${r.toolsInvoked.length} invoked, ${r.totalCalls} calls`,
+    );
     const statsW = Math.max(...statsList.map((s) => s.length));
     for (let i = 0; i < rows.length; i++) {
       lines.push(formatRow(rows[i]!, statsList[i]!, opts, nameW, statsW));
     }
-    lines.push("");
+    sections.push(lines.join("\n"));
   }
 
   if ((byBucket.get("dead")?.length ?? 0) > 0) {
-    lines.push(c(C.dim, `→ run: mcp-graveyard prune  to clear DEAD servers`));
+    sections.push(c(C.dim, `→ run: mcp-graveyard prune  to clear DEAD servers`));
   }
 
-  return lines.join("\n");
+  return sections;
+}
+
+export function formatAuditReport(report: AuditReport, opts: FormatOptions): string {
+  return formatAuditReportSections(report, opts).join("\n\n");
 }
 
 function formatRow(row: McpServerSummary, stats: string, opts: FormatOptions, nameW: number, statsW: number): string {

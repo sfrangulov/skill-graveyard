@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 import { dirname, join } from "node:path";
 import { runAudit } from "./audit.js";
-import { formatAuditReport, formatAuditJson, formatDrillDown, formatPruneReport, formatProjectsReport, formatSuggestReport } from "./format.js";
+import {
+  formatAuditReportSections,
+  formatAuditJson,
+  formatDrillDown,
+  formatPruneReport,
+  formatProjectsReport,
+  formatSuggestReport,
+} from "./format.js";
 import { runSuggest } from "./suggest.js";
 import { planPrune, applyPrune, writePruneBackup, ensureClaudeCliAvailable } from "./prune.js";
 import { runProjects } from "./projects.js";
 import { readMcpServers } from "./mcp_config.js";
 import type { McpBucket } from "./types.js";
+import { shouldAnimate, Spinner, streamSections } from "@skill-graveyard/core";
 
 const VALID_BUCKETS: McpBucket[] = ["active", "dead", "missing", "hallucinated"];
 
@@ -19,6 +27,7 @@ interface Args {
   claudeDir: string | undefined;
   apply: boolean;       // for prune
   pruneOnly: string | undefined;  // server-name filter for prune
+  noAnimate: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -31,6 +40,7 @@ function parseArgs(argv: string[]): Args {
     claudeDir: undefined,
     apply: false,
     pruneOnly: undefined,
+    noAnimate: false,
   };
   let i = 0;
   if (argv[i] && !argv[i]!.startsWith("--")) {
@@ -54,6 +64,7 @@ function parseArgs(argv: string[]): Args {
       args.pruneOnly = argv[++i];
     } else if (a === "--tools") args.tools = argv[++i];
     else if (a === "--claude-dir") args.claudeDir = argv[++i];
+    else if (a === "--no-animate") args.noAnimate = true;
     else if (a === "--help" || a === "-h") usage();
     else die(`unknown flag: ${a}`);
   }
@@ -80,12 +91,20 @@ function die(msg: string): never {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // Hide the parsing latency with a spinner on stderr (TTY-only, opt-out via
+  // --no-animate / NO_ANIMATE=1). JSON output skips it so machine consumers see
+  // a clean stream.
+  const spinner = new Spinner();
+  const wantAnimate = !args.json && shouldAnimate(process.stdout, args.noAnimate);
+  if (wantAnimate) spinner.start("scanning sessions…");
+  try {
   if (args.subcommand === "prune") {
     if (args.apply) ensureClaudeCliAvailable();
     const report = await runAudit({
       claudeDir: args.claudeDir,
       windowDays: args.days,
     });
+    spinner.stop();
     const plan = planPrune(report.rows, args.pruneOnly);
     if (!args.apply) {
       console.log(formatPruneReport(plan, args.days, { color: process.stdout.isTTY ?? false }));
@@ -109,6 +128,7 @@ async function main() {
   }
   if (args.subcommand === "projects") {
     const stats = await runProjects({ claudeDir: args.claudeDir, windowDays: args.days });
+    spinner.stop();
     if (args.json) {
       console.log(JSON.stringify(stats, null, 2));
       return;
@@ -118,6 +138,7 @@ async function main() {
   }
   if (args.subcommand === "suggest") {
     const rows = await runSuggest({ claudeDir: args.claudeDir, windowDays: args.days });
+    spinner.stop();
     if (args.json) {
       const lowercased = rows.map((r) => ({ ...r, category: r.category.toLowerCase() }));
       console.log(JSON.stringify(lowercased, null, 2));
@@ -131,6 +152,7 @@ async function main() {
     windowDays: args.days,
     only: args.only,
   });
+  spinner.stop();
   if (args.json) {
     console.log(formatAuditJson(report));
     return;
@@ -141,7 +163,11 @@ async function main() {
     console.log(formatDrillDown(args.tools, summary, { color: process.stdout.isTTY ?? false }));
     return;
   }
-  console.log(formatAuditReport(report, { color: process.stdout.isTTY ?? false }));
+  const sections = formatAuditReportSections(report, { color: process.stdout.isTTY ?? false });
+  await streamSections(sections, { animate: wantAnimate });
+  } finally {
+    spinner.stop();
+  }
 }
 
 main().catch((err) => {
