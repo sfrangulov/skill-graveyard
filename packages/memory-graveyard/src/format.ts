@@ -36,11 +36,16 @@ function colorize(opts: FormatOptions) {
   return (code: string, s: string) => (opts.color ? `${code}${s}${C.reset}` : s);
 }
 
-export function formatAuditReport(report: AuditReport, opts: FormatOptions): string {
+// Returns the audit split into sections (headline, then one block per non-empty
+// bucket, then an optional prune hint) so the CLI can stream them with pauses.
+export function formatAuditReportSections(
+  report: AuditReport,
+  opts: FormatOptions,
+): string[] {
   const c = colorize(opts);
-  const lines: string[] = [];
+  const sections: string[] = [];
 
-  lines.push(
+  sections.push(
     c(C.bold, `memory-graveyard`) +
       c(C.dim, ` — ${report.windowDays} days · `) +
       `${report.summary.indexedEntries} indexed · ` +
@@ -49,7 +54,6 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
       c(C.green, `${report.summary.successfulReads} succeeded`) +
       ` · ` +
       c(report.summary.erroredReads > 0 ? C.red : C.gray, `${report.summary.erroredReads} errored`),
-    "",
   );
 
   const grouped = new Map<Bucket, EntryReport[]>();
@@ -61,6 +65,7 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
   for (const bucket of BUCKET_ORDER) {
     const rows = grouped.get(bucket) ?? [];
     if (rows.length === 0) continue;
+    const lines: string[] = [];
     lines.push(c(C.bold, `${BUCKET_LABEL[bucket]} (${rows.length})`) + c(C.dim, suffixFor(bucket)));
     const nameW = Math.max("entry".length, ...rows.map((r) => r.basename.length));
     const readsW = Math.max("reads".length, ...rows.map((r) => String(r.reads.length).length));
@@ -81,13 +86,17 @@ export function formatAuditReport(report: AuditReport, opts: FormatOptions): str
       const lineNo = r.pointer ? String(r.pointer.line).padStart(lineW) : c(C.dim, "—".padStart(lineW));
       lines.push(`  ${name}  ${reads}  ${errs}  ${last}  ${lineNo}`);
     }
-    lines.push("");
+    sections.push(lines.join("\n"));
   }
 
   if ((grouped.get("dead")?.length ?? 0) + (grouped.get("hallucinated")?.length ?? 0) > 0) {
-    lines.push(c(C.dim, `→ run: memory-graveyard prune  to clear DEAD entries and broken pointers`));
+    sections.push(c(C.dim, `→ run: memory-graveyard prune  to clear DEAD entries and broken pointers`));
   }
-  return lines.join("\n");
+  return sections;
+}
+
+export function formatAuditReport(report: AuditReport, opts: FormatOptions): string {
+  return formatAuditReportSections(report, opts).join("\n\n");
 }
 
 export function formatAuditJson(report: AuditReport): string {

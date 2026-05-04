@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 import { runAudit } from "./audit.js";
 import { runLint } from "./lint.js";
-import { formatAuditReport, formatAuditJson, formatLintReport, formatLintJson, formatPruneReport, formatApplyResult, formatProjectsReport } from "./format.js";
+import {
+  formatAuditReportSections,
+  formatAuditJson,
+  formatLintReport,
+  formatLintJson,
+  formatPruneReport,
+  formatApplyResult,
+  formatProjectsReport,
+} from "./format.js";
 import { planPrune, applyPrune } from "./prune.js";
 import { runProjects } from "./projects.js";
 import type { Bucket } from "./types.js";
+import { shouldAnimate, Spinner, streamSections } from "@skill-graveyard/core";
 
 const VALID_BUCKETS: Bucket[] = ["active", "dead", "missing", "hallucinated"];
 
@@ -21,6 +30,7 @@ interface Args {
   truncationCutoff: number;
   staleDays: number;
   coldDays: number;
+  noAnimate: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -37,6 +47,7 @@ function parseArgs(argv: string[]): Args {
     truncationCutoff: 200,
     staleDays: 30,
     coldDays: 90,
+    noAnimate: false,
   };
   let i = 0;
   if (argv[i] && !argv[i]!.startsWith("--") && !argv[i]!.startsWith("-")) {
@@ -69,6 +80,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--truncation-cutoff") args.truncationCutoff = Number(argv[++i]);
     else if (a === "--stale-days") args.staleDays = Number(argv[++i]);
     else if (a === "--cold-days") args.coldDays = Number(argv[++i]);
+    else if (a === "--no-animate") args.noAnimate = true;
     else if (a === "--help" || a === "-h") usage();
     else die(`unknown flag: ${a}`);
   }
@@ -100,6 +112,12 @@ function die(msg: string): never {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  // Hide the parsing latency with a spinner on stderr; TTY-only, opt-out via
+  // --no-animate / NO_ANIMATE=1 / --json. Wraps every subcommand uniformly.
+  const spinner = new Spinner();
+  const wantAnimate = !args.json && shouldAnimate(process.stdout, args.noAnimate);
+  if (wantAnimate) spinner.start("scanning sessions…");
+  try {
   if (args.subcommand === "audit") {
     const report = await runAudit({
       claudeDir: args.claudeDir,
@@ -107,11 +125,15 @@ async function main() {
       only: args.only,
       projectKey: args.project,
     });
+    spinner.stop();
     if (args.json) {
       console.log(formatAuditJson(report));
       return;
     }
-    console.log(formatAuditReport(report, { color: process.stdout.isTTY ?? false }));
+    const sections = formatAuditReportSections(report, {
+      color: process.stdout.isTTY ?? false,
+    });
+    await streamSections(sections, { animate: wantAnimate });
     return;
   }
   if (args.subcommand === "lint") {
@@ -121,6 +143,7 @@ async function main() {
       truncationCutoff: args.truncationCutoff,
       staleDays: args.staleDays,
     });
+    spinner.stop();
     if (args.json) {
       console.log(formatLintJson(report));
     } else {
@@ -142,6 +165,7 @@ async function main() {
       staleDays: args.staleDays,
     });
     const plan = planPrune(audit, lint, { include: args.include, exclude: args.exclude });
+    spinner.stop();
     if (args.json) {
       console.log(JSON.stringify({ plan, applied: args.apply }, null, 2));
     } else {
@@ -159,6 +183,7 @@ async function main() {
       windowDays: args.days,
       coldDays: args.coldDays,
     });
+    spinner.stop();
     if (args.json) {
       console.log(JSON.stringify(stats, null, 2));
     } else {
@@ -167,6 +192,9 @@ async function main() {
     return;
   }
   die(`subcommand "${args.subcommand}" not yet implemented`);
+  } finally {
+    spinner.stop();
+  }
 }
 
 main().catch((err) => {
