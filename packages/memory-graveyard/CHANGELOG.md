@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/sfrangulov/skill-graveyard/compare/memory-graveyard@v0.3.0...memory-graveyard@v0.3.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* align @skill-graveyard/core dependency to ^0.3.0 ([0ec8ae6](https://github.com/sfrangulov/skill-graveyard/commit/0ec8ae662665ce64567123677b4da7221ff8cf06))
+
 ## [0.3.0](https://github.com/sfrangulov/skill-graveyard/compare/memory-graveyard@v0.2.1...memory-graveyard@v0.3.0) (2026-05-04)
 
 
