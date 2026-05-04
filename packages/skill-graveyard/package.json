@@ -43,6 +43,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@skill-graveyard/core": "^0.2.0"
+    "@skill-graveyard/core": "^0.3.0"
   }
 }
