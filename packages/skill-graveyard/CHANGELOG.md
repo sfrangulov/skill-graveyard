@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/sfrangulov/skill-graveyard/compare/skill-graveyard@v0.10.0...skill-graveyard@v0.11.0) (2026-05-04)
+
+
+### Features
+
+* **skill-graveyard:** animate audit with spinner and section reveal ([f9df149](https://github.com/sfrangulov/skill-graveyard/commit/f9df149e5c3d24769e865d7dcecbf0e4e47603c9))
+
 ## [0.10.0](https://github.com/sfrangulov/skill-graveyard/compare/skill-graveyard@v0.9.0...skill-graveyard@v0.10.0) (2026-05-01)
 
 

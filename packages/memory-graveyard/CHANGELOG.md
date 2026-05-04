@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/sfrangulov/skill-graveyard/compare/memory-graveyard@v0.2.1...memory-graveyard@v0.3.0) (2026-05-04)
+
+
+### Features
+
+* **memory-graveyard:** animate audit with spinner and section reveal ([e31e311](https://github.com/sfrangulov/skill-graveyard/commit/e31e3113796930f9337291b2707679db1fd0d772))
+
 ## [0.2.1](https://github.com/sfrangulov/skill-graveyard/compare/memory-graveyard@v0.2.0...memory-graveyard@v0.2.1) (2026-05-02)
 
 

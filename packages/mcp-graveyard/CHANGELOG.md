@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/sfrangulov/skill-graveyard/compare/mcp-graveyard@v0.3.0...mcp-graveyard@v0.4.0) (2026-05-04)
+
+
+### Features
+
+* **mcp-graveyard:** animate audit with spinner and section reveal ([a58c9fb](https://github.com/sfrangulov/skill-graveyard/commit/a58c9fb1c7b1cac4825e6f0f3650b59400c19f0d))
+
 ## [0.3.0](https://github.com/sfrangulov/skill-graveyard/compare/mcp-graveyard@v0.2.0...mcp-graveyard@v0.3.0) (2026-05-01)
 
 
