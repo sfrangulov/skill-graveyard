@@ -1,6 +1,6 @@
 {
   "packages/core": "0.3.0",
-  "packages/skill-graveyard": "0.11.0",
-  "packages/mcp-graveyard": "0.4.0",
-  "packages/memory-graveyard": "0.3.0"
+  "packages/skill-graveyard": "0.11.1",
+  "packages/mcp-graveyard": "0.4.1",
+  "packages/memory-graveyard": "0.3.1"
 }
