@@ -106,56 +106,56 @@ export function formatJson(report: unknown): string {
   return JSON.stringify(report, null, 2);
 }
 
-export function formatReport(report: AuditReport, opts: FormatOptions): string {
+// Returns the report split into sections so the CLI can stream them with
+// inter-section pauses (see streamSections in @skill-graveyard/core). Each
+// element is a self-contained block with internal newlines but no trailing
+// newline; separator handling is the caller's job.
+export function formatReportSections(
+  report: AuditReport,
+  opts: FormatOptions,
+): string[] {
   const c = colors(opts.color);
-  const lines: string[] = [];
+  const sections: string[] = [];
 
-  lines.push(...formatHeadline(report, c));
-  lines.push("");
+  sections.push(formatHeadline(report, c).join("\n"));
 
   const filtered = opts.filter
     ? report.rows.filter((r) => r.category === opts.filter)
     : report.rows;
 
   if (filtered.length === 0 && (!opts.filter || opts.filter !== "dead")) {
-    lines.push(`${c.dim}(no matching skills)${c.reset}`);
-    return lines.join("\n");
+    sections.push(`${c.dim}(no matching skills)${c.reset}`);
+    return sections;
   }
 
   if (!opts.filter || opts.filter === "active") {
     const rows = filtered.filter((r) => r.category === "active");
-    if (rows.length) {
-      lines.push(...formatActiveSection(rows, c));
-      lines.push("");
-    }
+    if (rows.length) sections.push(formatActiveSection(rows, c).join("\n"));
   }
 
   if (!opts.filter || opts.filter === "missing") {
     const rows = filtered.filter((r) => r.category === "missing");
-    if (rows.length) {
-      lines.push(...formatMissingSection(rows, c));
-      lines.push("");
-    }
+    if (rows.length) sections.push(formatMissingSection(rows, c).join("\n"));
   }
 
   if (!opts.filter || opts.filter === "hallucinated") {
     const rows = filtered.filter((r) => r.category === "hallucinated");
-    if (rows.length) {
-      lines.push(...formatHallucinatedSection(rows, c));
-      lines.push("");
-    }
+    if (rows.length) sections.push(formatHallucinatedSection(rows, c).join("\n"));
   }
 
   if (!opts.filter || opts.filter === "dead") {
     const deadRows = report.rows.filter((r) => r.category === "dead");
     const rollups = report.pluginGroups.filter((g) => g.rollupCandidate);
     if (deadRows.length || rollups.length) {
-      lines.push(...formatDeadSection(deadRows, rollups, report.windowDays, c));
-      lines.push("");
+      sections.push(formatDeadSection(deadRows, rollups, report.windowDays, c).join("\n"));
     }
   }
 
-  return lines.join("\n").trimEnd();
+  return sections;
+}
+
+export function formatReport(report: AuditReport, opts: FormatOptions): string {
+  return formatReportSections(report, opts).join("\n\n");
 }
 
 function formatHeadline(report: AuditReport, c: typeof C): string[] {

@@ -9,11 +9,16 @@ import {
   formatOutdatedReport,
   formatProjectsReport,
   formatPruneReport,
-  formatReport,
+  formatReportSections,
   formatSuggestReport,
 } from "./format.js";
 import { runOutdated } from "./outdated.js";
-import { resolveClaudePaths } from "@skill-graveyard/core";
+import {
+  resolveClaudePaths,
+  shouldAnimate,
+  Spinner,
+  streamSections,
+} from "@skill-graveyard/core";
 import { runPrune, type PruneSourceFilter } from "./prune.js";
 import { runProjects } from "./projects.js";
 import { runSuggest } from "./suggest.js";
@@ -47,6 +52,7 @@ interface ParsedArgs {
   pruneOnly?: PruneSourceFilter;
   noCache: boolean;
   ttlMinutes: number | null;
+  noAnimate: boolean;
 }
 
 const HELP = `skill-graveyard — audit Claude Code skills you actually use
@@ -72,6 +78,7 @@ COMMON OPTIONS
   --days <n>            window in days (default: 30)
   --json                emit machine-readable JSON instead of a table
   --no-color            disable ANSI colors
+  --no-animate          disable the spinner + section reveal (also: NO_ANIMATE=1)
   --claude-dir <path>   override Claude home directory (default: ~/.claude)
 
 AUDIT OPTIONS
@@ -113,6 +120,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     pruneApply: false,
     noCache: false,
     ttlMinutes: null,
+    noAnimate: false,
   };
 
   let i = 0;
@@ -156,6 +164,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       case "--no-color":
         args.color = false;
+        break;
+      case "--no-animate":
+        args.noAnimate = true;
         break;
       case "--color":
         args.color = true;
@@ -221,77 +232,96 @@ async function main() {
     return;
   }
 
-  if (args.command === "audit") {
-    const report = await runAudit({ days: args.days, claudeDir: args.claudeDir });
-    if (args.json) {
-      process.stdout.write(formatJson(report) + "\n");
-    } else {
-      process.stdout.write(
-        formatReport(report, { color: args.color, filter: args.auditFilter }) + "\n",
-      );
-    }
-    return;
-  }
+  // Hide the parser's "blank screen for several seconds" with a spinner on stderr.
+  // No-op when stderr isn't a TTY or when --no-animate / NO_ANIMATE is set, so
+  // pipes and CI keep their byte-clean stdout/stderr.
+  const spinner = new Spinner();
+  const wantAnimate = !args.json && shouldAnimate(process.stdout, args.noAnimate);
+  if (wantAnimate) spinner.start("scanning sessions…");
 
-  if (args.command === "prune") {
-    const report = await runPrune({
-      days: args.days,
-      apply: args.pruneApply,
-      only: args.pruneOnly,
-      claudeDir: args.claudeDir,
-    });
-    if (args.json) {
-      process.stdout.write(formatJson(report) + "\n");
-    } else {
-      process.stdout.write(formatPruneReport(report, { color: args.color }) + "\n");
+  try {
+    if (args.command === "audit") {
+      const report = await runAudit({ days: args.days, claudeDir: args.claudeDir });
+      spinner.stop();
+      if (args.json) {
+        process.stdout.write(formatJson(report) + "\n");
+      } else {
+        const sections = formatReportSections(report, {
+          color: args.color,
+          filter: args.auditFilter,
+        });
+        await streamSections(sections, { animate: wantAnimate });
+      }
+      return;
     }
-    const anyFailed = report.applied.some((e) => e.status === "failed");
-    if (anyFailed) process.exit(1);
-    return;
-  }
 
-  if (args.command === "suggest") {
-    const report = await runSuggest({ days: args.days, claudeDir: args.claudeDir });
-    if (args.json) {
-      process.stdout.write(formatJson(report) + "\n");
-    } else {
-      process.stdout.write(formatSuggestReport(report, { color: args.color }) + "\n");
+    if (args.command === "prune") {
+      const report = await runPrune({
+        days: args.days,
+        apply: args.pruneApply,
+        only: args.pruneOnly,
+        claudeDir: args.claudeDir,
+      });
+      spinner.stop();
+      if (args.json) {
+        process.stdout.write(formatJson(report) + "\n");
+      } else {
+        process.stdout.write(formatPruneReport(report, { color: args.color }) + "\n");
+      }
+      const anyFailed = report.applied.some((e) => e.status === "failed");
+      if (anyFailed) process.exit(1);
+      return;
     }
-    return;
-  }
 
-  if (args.command === "cost") {
-    const report = await runCost({ days: args.days, claudeDir: args.claudeDir });
-    if (args.json) {
-      process.stdout.write(formatJson(report) + "\n");
-    } else {
-      process.stdout.write(formatCostReport(report, { color: args.color }) + "\n");
+    if (args.command === "suggest") {
+      const report = await runSuggest({ days: args.days, claudeDir: args.claudeDir });
+      spinner.stop();
+      if (args.json) {
+        process.stdout.write(formatJson(report) + "\n");
+      } else {
+        process.stdout.write(formatSuggestReport(report, { color: args.color }) + "\n");
+      }
+      return;
     }
-    return;
-  }
 
-  if (args.command === "projects") {
-    const report = await runProjects({ days: args.days, claudeDir: args.claudeDir });
-    if (args.json) {
-      process.stdout.write(formatJson(report) + "\n");
-    } else {
-      process.stdout.write(formatProjectsReport(report, { color: args.color }) + "\n");
+    if (args.command === "cost") {
+      const report = await runCost({ days: args.days, claudeDir: args.claudeDir });
+      spinner.stop();
+      if (args.json) {
+        process.stdout.write(formatJson(report) + "\n");
+      } else {
+        process.stdout.write(formatCostReport(report, { color: args.color }) + "\n");
+      }
+      return;
     }
-    return;
-  }
 
-  if (args.command === "outdated") {
-    const report = await runOutdated({
-      claudeDir: resolveClaudePaths(args.claudeDir).claudeDir,
-      ttlMinutes: args.ttlMinutes ?? undefined,
-      noCache: args.noCache,
-    });
-    if (args.json) {
-      process.stdout.write(formatJson(report) + "\n");
-    } else {
-      process.stdout.write(formatOutdatedReport(report, { color: args.color }) + "\n");
+    if (args.command === "projects") {
+      const report = await runProjects({ days: args.days, claudeDir: args.claudeDir });
+      spinner.stop();
+      if (args.json) {
+        process.stdout.write(formatJson(report) + "\n");
+      } else {
+        process.stdout.write(formatProjectsReport(report, { color: args.color }) + "\n");
+      }
+      return;
     }
-    return;
+
+    if (args.command === "outdated") {
+      const report = await runOutdated({
+        claudeDir: resolveClaudePaths(args.claudeDir).claudeDir,
+        ttlMinutes: args.ttlMinutes ?? undefined,
+        noCache: args.noCache,
+      });
+      spinner.stop();
+      if (args.json) {
+        process.stdout.write(formatJson(report) + "\n");
+      } else {
+        process.stdout.write(formatOutdatedReport(report, { color: args.color }) + "\n");
+      }
+      return;
+    }
+  } finally {
+    spinner.stop();
   }
 }
 
