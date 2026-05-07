@@ -1,6 +1,10 @@
 ---
 name: memory-graveyard
 description: Audit which entries in your project's MEMORY.md Claude actually reads. Use when the user wants to find dead memory entries, broken pointers in MEMORY.md, orphan memory files, or surface entries that fall below the system-prompt truncation cutoff. Triggers on "audit MEMORY.md", "dead memory entries", "broken memory pointers", "memory hygiene", "unused memory", "memory truncation". Runs locally; reads ~/.claude/projects session JSONL logs and memory directories. No network calls.
+license: MIT
+metadata:
+  author: sfrangulov
+  version: "1.0.0"
 ---
 
 # memory-graveyard

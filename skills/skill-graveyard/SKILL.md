@@ -1,6 +1,10 @@
 ---
 name: skill-graveyard
 description: Audit which Claude Code skills you actually invoke. Use when the user wants to find dead/unused skills, hallucinated skill invocations, per-project skill stats, or token cost of installed skill metadata. Triggers on "what skills don't I use?", "clean up my skills", "why didn't this skill work?", "audit skills". Runs locally; reads ~/.claude session JSONL logs. No network calls.
+license: MIT
+metadata:
+  author: sfrangulov
+  version: "1.0.0"
 ---
 
 # skill-graveyard

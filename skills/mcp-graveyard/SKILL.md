@@ -1,6 +1,10 @@
 ---
 name: mcp-graveyard
 description: Audit which MCP server tools your Claude Code sessions actually invoke. Use when the user wants to find dead MCP servers (configured but never called), hallucinated MCP tool calls, or per-project MCP usage. Triggers on "which MCP servers don't I use?", "clean up MCP config", "remove unused MCP servers", "audit MCP tools". Runs locally; reads ~/.claude session JSONL logs and ~/.claude.json. No network calls.
+license: MIT
+metadata:
+  author: sfrangulov
+  version: "1.0.0"
 ---
 
 # mcp-graveyard
