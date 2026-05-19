@@ -1,22 +1,31 @@
-# skill-graveyard
+# I installed 116 Claude Code skills. After 30 days, I'd used 35.
 
-[![npm version](https://img.shields.io/npm/v/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard)
-[![npm downloads](https://img.shields.io/npm/dm/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard)
-[![license](https://img.shields.io/npm/l/skill-graveyard.svg)](LICENSE)
-[![node](https://img.shields.io/node/v/skill-graveyard.svg)](package.json)
+The other 81 were dead weight — still loading their `description` into every API request, never invoked once. And Claude tried to call 65 skill names that don't exist at all.
 
-Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)
+`skill-graveyard` found that from my local Claude Code session logs. It tells you the same about your setup — one command, no network, no telemetry:
+
+```sh
+npx skill-graveyard
+```
 
 [![demo](https://raw.githubusercontent.com/sfrangulov/skill-graveyard/main/docs/demo.gif)](https://asciinema.org/a/JFgkjIF1emExXjQe)
 
-Audit which Claude Code skills you actually use. Parses your local session logs and sorts every skill name that appears into one of four buckets:
+Run it monthly — skill bloat creeps back every time you install something you try once.
+
+## What it does
+
+Parses your local session logs and sorts every skill name that appears into one of four buckets:
 
 1. **Active** — installed AND invoked successfully. Keep.
 2. **Dead** — installed but zero invocations in the window. Removal candidates.
 3. **Missing** — invoked successfully, but no SKILL.md was found in any scanned path. Project-scoped skills, skills registered by an external framework injecting into Claude Code, or skills installed somewhere this tool doesn't yet look.
 4. **Hallucinated** — invoked and the runtime returned an error. Mostly Claude confusing tool/command names with skill names; surfaced for telemetry but not directly actionable.
 
-Same parser, multiple signals: it's not just a graveyard, it's an audit of where your skill setup is over- and under-provisioned.
+Not just a graveyard — an audit of where your skill setup is over- and under-provisioned.
+
+If it surfaced something useful, a ⭐ helps other people find it (no pressure).
+
+<sub>[![npm version](https://img.shields.io/npm/v/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard) [![npm downloads](https://img.shields.io/npm/dm/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard) [![license](https://img.shields.io/npm/l/skill-graveyard.svg)](LICENSE) [![node](https://img.shields.io/node/v/skill-graveyard.svg)](package.json) · Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)</sub>
 
 ### Companion tool: mcp-graveyard
 
