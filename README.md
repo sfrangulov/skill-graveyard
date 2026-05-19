@@ -1,5 +1,7 @@
 # I installed 116 Claude Code skills. After 30 days, I'd used 35.
 
+[![npm version](https://img.shields.io/npm/v/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard) [![npm downloads](https://img.shields.io/npm/dm/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard) [![license](https://img.shields.io/npm/l/skill-graveyard.svg)](LICENSE) [![node](https://img.shields.io/node/v/skill-graveyard.svg)](package.json)
+
 The other 81 were dead weight — still loading their `description` into every API request, never invoked once. And Claude tried to call 65 skill names that don't exist at all.
 
 `skill-graveyard` found that from my local Claude Code session logs. It tells you the same about your setup — one command, no network, no telemetry:
@@ -25,7 +27,7 @@ Not just a graveyard — an audit of where your skill setup is over- and under-p
 
 If it surfaced something useful, a ⭐ helps other people find it (no pressure).
 
-<sub>[![npm version](https://img.shields.io/npm/v/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard) [![npm downloads](https://img.shields.io/npm/dm/skill-graveyard.svg)](https://www.npmjs.com/package/skill-graveyard) [![license](https://img.shields.io/npm/l/skill-graveyard.svg)](LICENSE) [![node](https://img.shields.io/node/v/skill-graveyard.svg)](package.json) · Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)</sub>
+<sub>Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)</sub>
 
 ### Companion tool: mcp-graveyard
 
