@@ -27,6 +27,8 @@ Not just a graveyard — an audit of where your skill setup is over- and under-p
 
 If it surfaced something useful, a ⭐ helps other people find it (no pressure).
 
+More Claude Code tooling from the same parser: [`mcp-graveyard`](https://www.npmjs.com/package/mcp-graveyard) · [`memory-graveyard`](https://www.npmjs.com/package/memory-graveyard) · a curated RU handbook → [`claude-code-handbook-ru`](https://github.com/sfrangulov/claude-code-handbook-ru). Follow [@sfrangulov](https://github.com/sfrangulov) for the next one.
+
 <sub>Docs & demo: <https://sfrangulov.github.io/skill-graveyard/> · built by [@sfrangulov](https://github.com/sfrangulov)</sub>
 
 ### Companion tool: mcp-graveyard
